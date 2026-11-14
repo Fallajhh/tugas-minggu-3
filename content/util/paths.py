@@ -1,3 +1,4 @@
+import json
 import os
 
 
@@ -7,6 +8,22 @@ class Paths:
     )
     CONTENT_DIR = os.path.join(BASE_DIR, "content")
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+    DATABASE_DIR = os.path.join(os.environ.get("ANDROID_PRIVATE", BASE_DIR), "data")
+
+    LOG = "log.json"
+
+    @classmethod
+    def database(cls, *parts):
+        os.makedirs(cls.DATABASE_DIR, exist_ok=True)
+        return os.path.join(cls.DATABASE_DIR, *parts)
+
+    @classmethod
+    def read_json(cls, *parts):
+        try:
+            with open(cls.database(*parts), encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
 
     @classmethod
     def asset(cls, *parts):
@@ -14,7 +31,6 @@ class Paths:
         if not os.path.exists(path):
             raise FileNotFoundError(f"Asset tidak ditemukan: {path}")
         return path
-
 
     @classmethod
     def file(cls, *parts):

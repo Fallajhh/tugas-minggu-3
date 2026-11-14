@@ -1,4 +1,5 @@
 import content.config.config
+from kivy.utils import platform
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivymd.app import MDApp
@@ -13,6 +14,16 @@ class MainApp(MDApp):
 
     def on_start(self):
         Clock.schedule_once(lambda dt: Clock.schedule_once(lambda dt: Window.show(), 0), 0)
+        if platform == "android":
+            from android.permissions import request_permissions, Permission
+            request_permissions([
+                Permission.ACCESS_FINE_LOCATION,
+                Permission.ACCESS_COARSE_LOCATION,
+                Permission.POST_NOTIFICATIONS,
+            ])
+
+    def on_pause(self):
+        return True
 
 
 MainApp().run()

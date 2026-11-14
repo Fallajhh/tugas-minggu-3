@@ -1,7 +1,6 @@
 #:import MapView kivy_garden.mapview.MapView
 #:import Factory kivy.factory.Factory
 
-
 <Record>:
     on_enter: Factory.RecordModal().open()
 
@@ -9,6 +8,15 @@
         lat: -6.9175
         lon: 107.6191
         zoom: 14
+
+    MDLabel:
+        id: status
+        text: ""
+        adaptive_height: True
+        halign: "center"
+        pos_hint: {"center_x": .5, "top": .95}
+
+
 
 <RecordModal>:
     size_hint: None, None
