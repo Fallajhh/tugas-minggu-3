@@ -13,6 +13,7 @@
 <NavBarItem>:
     ripple_effect: False
     indicator_color: 0, 0, 0, 0
+    size_hint_x: 1
 
     NavBarIcon:
         icon: root.icon_source
@@ -28,6 +29,7 @@
 <NavBar>:
     radius: [dp(24), dp(24), 0, 0]
     md_bg_color: app.theme_cls.surfaceContainerColor
+    mode: "default"
 
     elevation_level: 1
     shadow_color: 0, 0, 0, 0.3
@@ -36,27 +38,60 @@
     shadow_radius: [dp(24), dp(24), 0, 0]
 
     NavBarItem:
-        icon_source:Paths.asset("icon", "home.png")
+        icon_source: Paths.asset("icon", "home.png")
         text: "Home"
-        color_active:"#FF6822"
+        color_active: "#FF6822"
         active: True
+        opacity: 1 if root.mode == "default" else 0
+        disabled: root.mode == "record"
+        size_hint_x: 1 if root.mode == "default" else 0
 
     NavBarItem:
-        icon_source:Paths.asset("icon", "map.png")
+        icon_source: Paths.asset("icon", "map.png")
         text: "Map"
-        color_active:"#FF6822"
+        color_active: "#FF6822"
+        opacity: 1 if root.mode == "default" else 0
+        disabled: root.mode == "record"
+        size_hint_x: 1 if root.mode == "default" else 0
 
     NavBarItem:
-        icon_source:Paths.asset("icon", "record.png")
+        icon_source: Paths.asset("icon", "record.png")
         text: "Record"
-        color_active:"#FF6822"
+        color_active: "#FF6822"
+        opacity: 1 if root.mode == "default" else 0
+        disabled: root.mode == "record"
+        size_hint_x: 1 if root.mode == "default" else 0
 
     NavBarItem:
-        icon_source:Paths.asset("icon", "time.png")
+        icon_source: Paths.asset("icon", "time.png")
         text: "Time"
-        color_active:"#FF6822"
+        color_active: "#FF6822"
+        opacity: 1 if root.mode == "default" else 0
+        disabled: root.mode == "record"
+        size_hint_x: 1 if root.mode == "default" else 0
 
     NavBarItem:
-        icon_source:Paths.asset("icon", "user.png")
+        icon_source: Paths.asset("icon", "user.png")
         text: "Profile"
-        color_active:"#FF6822"
+        color_active: "#FF6822"
+        opacity: 1 if root.mode == "default" else 0
+        disabled: root.mode == "record"
+        size_hint_x: 1 if root.mode == "default" else 0
+
+    NavBarItem:
+        icon_source: Paths.asset("icon", "record.png")
+        text: "Record"
+        color_active: "#FF6822"
+        active: root.mode == "record"
+        opacity: 1 if root.mode == "record" else 0
+        disabled: root.mode != "record"
+        size_hint_x: 1 if root.mode == "record" else 0
+
+    NavBarItem:
+        icon_source: Paths.asset("icon", "time.png")
+        text: "Pause"
+        color_active: "#FF6822"
+        opacity: 1 if root.mode == "record" else 0
+        disabled: root.mode != "record"
+        size_hint_x: 1 if root.mode == "record" else 0
+        on_release: root.toggle_pause()
