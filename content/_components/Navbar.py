@@ -9,8 +9,7 @@ class NavBarItem(MDNavigationItem):
     text = StringProperty()
     color_active = ColorProperty("#1E88E5") 
     color_inactive = ColorProperty("#1a1a1a")
-    def lay_canvas_instructions(self):
-        pass
+
 
 
 class NavBar(MDNavigationBar):
