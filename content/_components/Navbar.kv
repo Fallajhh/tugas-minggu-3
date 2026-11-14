@@ -1,0 +1,47 @@
+<NavBarItem>:
+    indicator_color: 0, 0, 0, 0
+
+    MDNavigationItemIcon:
+        icon: root.icon
+        theme_icon_color: "Custom"
+        icon_color: root.color_active if root.active else root.color_inactive
+
+    MDNavigationItemLabel:
+        text: root.text
+
+
+<NavBar>:
+    radius: [dp(24), dp(24), 0, 0]
+    md_bg_color: app.theme_cls.surfaceContainerColor
+
+    elevation_level: 1
+    shadow_color: 0, 0, 0, 0.3
+    shadow_offset: 0, 0
+    shadow_softness: 0
+    shadow_radius: [dp(24), dp(24), 0, 0]
+
+    NavBarItem:
+        icon: "home"
+        text: "Home"
+        color_active:"#1E88E5"
+        active: True
+
+    NavBarItem:
+        icon: "map"
+        text: "Map"
+        color_active:"#1E88E5"
+
+    NavBarItem:
+        icon: "record-circle"
+        text: "Record"
+        color_active:"#FFAA0D"
+
+    NavBarItem:
+        icon: "clock-outline"
+        text: "Time"
+        color_active:"#1E88E5"
+
+    NavBarItem:
+        icon: "account"
+        text: "Profile"
+        color_active:"#1E88E5"
