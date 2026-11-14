@@ -49,6 +49,10 @@ class Record(MDScreen):
             f"{last['lat']:.5f}, {last['lon']:.5f}"
         )
 
+    def stop_tracking(self):
+        TrackManager.stop()
+        self.ids.status.text = "Perekaman dihentikan"
+
 
 
 Builder.load_file(Paths.file("page", "Record", "page.kv"))
