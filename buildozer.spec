@@ -9,7 +9,7 @@ source.exclude_dirs = .venv,.git,.github,bin,.buildozer,__pycache__
 
 version = 0.1
 
-requirements = python3,kivy==2.3.0,https://github.com/kivymd/KivyMD/archive/master.zip,materialyoucolor,materialshapes,asynckivy,asyncgui,exceptiongroup,pillow
+requirements = python3,kivy==2.3.0,kivymd==2.0.0,materialyoucolor,materialshapes,asynckivy,asyncgui,exceptiongroup,pillow
 
 orientation = portrait
 fullscreen = 0
