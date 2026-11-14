@@ -17,11 +17,11 @@ class RecordModal(ModalView):
     def on_start(self):
         self.started = True
 
-        TrackManager.start()
-
         app = MDApp.get_running_app()
         record = app.root.ids.screen_manager.get_screen("Record")
+
         record.start_timer()
+        TrackManager.start()
 
         self.dismiss()
 
@@ -36,6 +36,7 @@ class Record(MDScreen):
     _timer = None
     started_at = 0
     last_position = None
+    camera_initialized = False
 
     def on_kv_post(self, base_widget):
         self.map_view = self.ids.map_view
@@ -43,7 +44,11 @@ class Record(MDScreen):
         self.status = self.ids.status
 
         self.map_view.bind(zoom=self.update_marker_scale)
-        self.update_marker_scale(self.map_view, self.map_view.zoom)
+
+        self.update_marker_scale(
+            self.map_view,
+            self.map_view.zoom
+        )
 
     def on_location(self, **kwargs):
         latitude = kwargs.get("lat")
@@ -52,8 +57,11 @@ class Record(MDScreen):
         if latitude is None or longitude is None:
             return
 
-        latitude = float(latitude)
-        longitude = float(longitude)
+        try:
+            latitude = float(latitude)
+            longitude = float(longitude)
+        except (ValueError, TypeError):
+            return
 
         if not (-90 <= latitude <= 90):
             return
@@ -66,23 +74,35 @@ class Record(MDScreen):
         self.human_position.lat = latitude
         self.human_position.lon = longitude
 
-        self.map_view.center_on(latitude, longitude)
+        if not self.camera_initialized:
+            self.map_view.center_on(latitude, longitude)
+            self.camera_initialized = True
 
         self.status.text = (
-            f"GPS Aktif\n{latitude:.5f}, {longitude:.5f}"
+            f"GPS Aktif\n"
+            f"{latitude:.5f}, {longitude:.5f}"
         )
 
     def update_marker_scale(self, map_view, zoom):
-        size = max(8, min(48, 24 * (2 ** (zoom - 14))))
+        size = max(
+            8,
+            min(48, 24 * (2 ** (zoom - 14)))
+        )
+
         self.human_position.size = (size, size)
 
     def start_timer(self):
         self.started_at = time.time()
+        self.last_position = None
+        self.camera_initialized = False
 
         if self._timer:
             self._timer.cancel()
 
-        self._timer = Clock.schedule_interval(self.tick, 1)
+        self._timer = Clock.schedule_interval(
+            self.tick,
+            1
+        )
 
     def tick(self, dt):
         elapsed = int(time.time() - self.started_at)
@@ -90,9 +110,12 @@ class Record(MDScreen):
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
 
-        if self.last_position:
+        if self.last_position is not None:
             latitude, longitude = self.last_position
-            position = f"{latitude:.5f}, {longitude:.5f}"
+
+            position = (
+                f"{latitude:.5f}, {longitude:.5f}"
+            )
         else:
             position = "Menunggu GPS..."
 
@@ -108,13 +131,19 @@ class Record(MDScreen):
             self._timer.cancel()
             self._timer = None
 
+        self.last_position = None
+        self.camera_initialized = False
+
+        self.status.text = "Perekaman dihentikan"
+
         app = MDApp.get_running_app()
         app.root.ids.screen_manager.current = "Home"
         app.root.ids.navbar.select("Home")
 
-        self.status.text = "Perekaman dihentikan"
-
-        self.last_position = None
+    def on_leave(self):
+        if self._timer:
+            self._timer.cancel()
+            self._timer = None
 
 
 Builder.load_file(Paths.file("page", "Record", "page.kv"))
