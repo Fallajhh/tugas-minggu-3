@@ -22,7 +22,9 @@
     MDBoxLayout:
         size_hint_y: None
         height: dp(80)
-        padding: [dp(5), 0, dp(5), dp(8)]
-    
+        padding: [dp(5), 0, dp(5), 0]
+
         NavBar:
-            on_switch_tabs: screen_manager.current = args[3]
+            on_switch_tabs:
+                if screen_manager.has_screen(args[3]): \
+                screen_manager.current = args[3]
