@@ -13,14 +13,19 @@ class MainApp(MDApp):
         return Manager()
 
     def on_start(self):
-        Clock.schedule_once(lambda dt: Clock.schedule_once(lambda dt: Window.show(), 0), 0)
-        if platform == "android":
-            from android.permissions import request_permissions, Permission
-            request_permissions([
-                Permission.ACCESS_FINE_LOCATION,
-                Permission.ACCESS_COARSE_LOCATION,
-                Permission.POST_NOTIFICATIONS,
-            ])
+        if platform != "android":
+            Clock.schedule_once(lambda dt: Clock.schedule_once(lambda dt: Window.show(), 0), 0)
+        else:
+            Clock.schedule_once(self.ask_permissions, 1)
+
+    def ask_permissions(self, dt):
+        from android.permissions import request_permissions, Permission
+        request_permissions([
+            Permission.ACCESS_FINE_LOCATION,
+            Permission.ACCESS_COARSE_LOCATION,
+            Permission.POST_NOTIFICATIONS,
+        ])
+
 
     def on_pause(self):
         return True

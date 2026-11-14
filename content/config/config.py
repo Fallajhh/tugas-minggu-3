@@ -1,9 +1,10 @@
 from kivy.config import Config
+from kivy.utils import platform
 
-
-Config.set('graphics', 'width', '360')
-Config.set('graphics', 'height', '640')
-Config.set('graphics', 'resizable', '0')
+if platform != "android":
+    Config.set('graphics', 'width', '360')
+    Config.set('graphics', 'height', '640')
+    Config.set('graphics', 'resizable', '0')
 
 from kivy.core.window import Window
 
