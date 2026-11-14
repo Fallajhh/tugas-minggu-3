@@ -1,8 +1,11 @@
+#:import MapView kivy_garden.mapview.MapView
+
 <Map>:
     MDBoxLayout:
         orientation: "vertical"
         md_bg_color: self.theme_cls.backgroundColor
 
-        MDLabel:
-            text: "Halaman Map"
-            halign: "center"
+    MapView:
+        lat: -6.9175
+        lon: 107.6191
+        zoom: 14

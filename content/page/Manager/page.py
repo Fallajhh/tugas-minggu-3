@@ -1,5 +1,6 @@
 from kivy.lang import Builder
-from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.floatlayout import MDFloatLayout
+
 
 from content._components.Navbar import NavBar
 from content.page.Home.page import Home
@@ -10,7 +11,7 @@ from content.page.Profile.page import Profile
 from content.util.paths import Paths
 
 
-class Manager(MDBoxLayout):
+class Manager(MDFloatLayout):
     pass
 
 

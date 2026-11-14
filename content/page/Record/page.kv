@@ -1,8 +1,68 @@
+#:import MapView kivy_garden.mapview.MapView
+#:import Factory kivy.factory.Factory
+
+
 <Record>:
+    on_enter: Factory.RecordModal().open()
+
+    MapView:
+        lat: -6.9175
+        lon: 107.6191
+        zoom: 14
+
+<RecordModal>:
+    size_hint: None, None
+    width: dp(300)
+    height: content.height
+    auto_dismiss: True
+    background: ""
+    background_color: 0, 0, 0, 0
+    overlay_color: 0, 0, 0, 0.4
+
     MDBoxLayout:
+        id: content
         orientation: "vertical"
-        md_bg_color: self.theme_cls.backgroundColor
+        adaptive_height: True
+        padding: dp(24)
+        spacing: dp(16)
+        radius: [dp(24)]
+        md_bg_color: app.theme_cls.surfaceContainerColor
 
         MDLabel:
-            text: "Halaman Record"
-            halign: "center"
+            text: "Record"
+            font_style: "Title"
+            role: "large"
+            adaptive_height: True
+
+        MDLabel:
+            text: "Siap mulai merekam aktivitasmu?"
+            font_style: "Body"
+            role: "medium"
+            theme_text_color: "Secondary"
+            adaptive_height: True
+
+        MDBoxLayout:
+            adaptive_height: True
+            spacing: dp(12)
+
+            MDButton:
+                style: "filled"
+                theme_bg_color: "Custom"
+                md_bg_color: "#9E9E9E"
+                size_hint_x: 1
+                on_release: root.dismiss()
+
+                MDButtonText:
+                    text: "Back"
+                    pos_hint: {"center_x": .5, "center_y": .5}
+
+            MDButton:
+                style: "filled"
+                theme_bg_color: "Custom"
+                md_bg_color: "#FF6822"
+                size_hint_x: 1
+                on_release: root.on_start()
+
+                MDButtonText:
+                    text: "Start"
+                    pos_hint: {"center_x": .5, "center_y": .5}
