@@ -1,3 +1,5 @@
+#:import Paths content.util.paths.Paths
+
 <NavBarItem>:
     indicator_color: 0, 0, 0, 0
 
@@ -8,6 +10,9 @@
 
     MDNavigationItemLabel:
         text: root.text
+        theme_font_name: "Custom"
+        font_name: Paths.asset("fonts", "Custard.otf")
+        text_color: root.color_active if root.active else root.color_inactive
 
 
 <NavBar>:
