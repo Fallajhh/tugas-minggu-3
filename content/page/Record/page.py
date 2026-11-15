@@ -1,4 +1,4 @@
-
+import os
 import time
 
 from kivy.clock import Clock
@@ -34,6 +34,7 @@ class RecordModal(ModalView):
 
 class Record(MDScreen):
     _timer = None
+    _poll = None
     started_at = 0
     last_position = None
     camera_initialized = False
@@ -42,12 +43,27 @@ class Record(MDScreen):
         self.map_view = self.ids.map_view
         self.human_position = self.ids.human_position
         self.status = self.ids.status
+        
+        try:
+            cache = os.path.join(
+                MDApp.get_running_app().user_data_dir, "map_cache"
+            )
+            os.makedirs(cache, exist_ok=True)
+            self.map_view.map_source.cache_dir = cache
+        except Exception as e:
+            print("[record] cache_dir gagal diatur:", e)
 
         self.map_view.bind(zoom=self.update_marker_scale)
+        self.update_marker_scale(self.map_view, self.map_view.zoom)
 
-        self.update_marker_scale(
-            self.map_view,
-            self.map_view.zoom
+    def poll_location(self, dt):
+        p = Paths.read_json(Paths.LAST)
+        if not p:
+            return
+        if p.get("ts", 0) < self.started_at:
+            return
+        self.on_location(
+            lat=p.get("lat"), lon=p.get("lon"), accuracy=p.get("accuracy")
         )
 
     def on_location(self, **kwargs):
@@ -65,7 +81,6 @@ class Record(MDScreen):
 
         if not (-90 <= latitude <= 90):
             return
-
         if not (-180 <= longitude <= 180):
             return
 
@@ -78,62 +93,47 @@ class Record(MDScreen):
             self.map_view.center_on(latitude, longitude)
             self.camera_initialized = True
 
-        self.status.text = (
-            f"GPS Aktif\n"
-            f"{latitude:.5f}, {longitude:.5f}"
-        )
-
     def update_marker_scale(self, map_view, zoom):
-        size = max(
-            8,
-            min(48, 24 * (2 ** (zoom - 14)))
-        )
-
+        size = max(8, min(48, 24 * (2 ** (zoom - 14))))
         self.human_position.size = (size, size)
+
+    def _cancel_clocks(self):
+        for name in ("_timer", "_poll"):
+            ev = getattr(self, name)
+            if ev:
+                ev.cancel()
+                setattr(self, name, None)
 
     def start_timer(self):
         self.started_at = time.time()
         self.last_position = None
         self.camera_initialized = False
 
-        if self._timer:
-            self._timer.cancel()
-
-        self._timer = Clock.schedule_interval(
-            self.tick,
-            1
-        )
+        self._cancel_clocks()
+        self._timer = Clock.schedule_interval(self.tick, 1)
+        self._poll = Clock.schedule_interval(self.poll_location, 1)
 
     def tick(self, dt):
         elapsed = int(time.time() - self.started_at)
-
         hours, remainder = divmod(elapsed, 3600)
         minutes, seconds = divmod(remainder, 60)
 
         if self.last_position is not None:
-            latitude, longitude = self.last_position
-
-            position = (
-                f"{latitude:.5f}, {longitude:.5f}"
-            )
+            lat, lon = self.last_position
+            position = f"{lat:.5f}, {lon:.5f}"
         else:
             position = "Menunggu GPS..."
 
         self.status.text = (
-            f"{hours:02d}:{minutes:02d}:{seconds:02d}\n"
-            f"{position}"
+            f"{hours:02d}:{minutes:02d}:{seconds:02d}\n{position}"
         )
 
     def stop_tracking(self):
         TrackManager.stop()
-
-        if self._timer:
-            self._timer.cancel()
-            self._timer = None
+        self._cancel_clocks()
 
         self.last_position = None
         self.camera_initialized = False
-
         self.status.text = "Perekaman dihentikan"
 
         app = MDApp.get_running_app()
@@ -141,9 +141,7 @@ class Record(MDScreen):
         app.root.ids.navbar.select("Home")
 
     def on_leave(self):
-        if self._timer:
-            self._timer.cancel()
-            self._timer = None
+        self._cancel_clocks()
 
 
 Builder.load_file(Paths.file("page", "Record", "page.kv"))

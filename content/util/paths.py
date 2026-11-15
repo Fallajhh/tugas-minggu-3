@@ -11,6 +11,7 @@ class Paths:
     DATABASE_DIR = os.path.join(os.environ.get("ANDROID_PRIVATE", BASE_DIR), "data")
 
     LOG = "log.json"
+    LAST = "last.json"
 
     @classmethod
     def database(cls, *parts):
@@ -24,6 +25,15 @@ class Paths:
                 return json.load(f)
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
+
+    @classmethod
+    def write_json(cls, data, *parts):
+        """Tulis atomik: file sementara dulu, lalu diganti."""
+        path = cls.database(*parts)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp, path)
 
     @classmethod
     def asset(cls, *parts):
