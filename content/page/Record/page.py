@@ -33,21 +33,23 @@ class RecordModal(ModalView):
 
 
 class Record(MDScreen):
-    _timer = None
-    _poll = None
+    _timer = None       # timer stopwatch (1 detik)
+    _poll = None        # timer baca file lokasi (0.5 detik)
+    _anim = None        # timer gerak marker (tiap frame)
+
     started_at = 0
-    last_position = None
-    camera_initialized = False
+    last_ts = None      # waktu titik GPS terakhir yang sudah dibaca
+    pos = None          # posisi marker yang sedang tampil: (lat, lon)
+    move = None         # gerakan berjalan: (dari, ke, waktu_mulai, durasi)
 
     def on_kv_post(self, base_widget):
         self.map_view = self.ids.map_view
         self.human_position = self.ids.human_position
         self.status = self.ids.status
-        
+
+        # folder cache tile peta yang boleh ditulis di Android
         try:
-            cache = os.path.join(
-                MDApp.get_running_app().user_data_dir, "map_cache"
-            )
+            cache = os.path.join(MDApp.get_running_app().user_data_dir, "map_cache")
             os.makedirs(cache, exist_ok=True)
             self.map_view.map_source.cache_dir = cache
         except Exception as e:
@@ -56,84 +58,110 @@ class Record(MDScreen):
         self.map_view.bind(zoom=self.update_marker_scale)
         self.update_marker_scale(self.map_view, self.map_view.zoom)
 
+    # --- 1. Baca titik terbaru dari service ---------------------------------
     def poll_location(self, dt):
         p = Paths.read_json(Paths.LAST)
         if not p:
             return
-        if p.get("ts", 0) < self.started_at:
-            return
-        self.on_location(
-            lat=p.get("lat"), lon=p.get("lon"), accuracy=p.get("accuracy")
-        )
 
-    def on_location(self, **kwargs):
-        latitude = kwargs.get("lat")
-        longitude = kwargs.get("lon")
-
-        if latitude is None or longitude is None:
-            return
+        ts = p.get("ts", 0)
+        if ts < self.started_at or ts == self.last_ts:
+            return  # titik lama atau sudah dibaca
 
         try:
-            latitude = float(latitude)
-            longitude = float(longitude)
-        except (ValueError, TypeError):
+            lat = float(p["lat"])
+            lon = float(p["lon"])
+        except (KeyError, ValueError, TypeError):
+            return
+        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             return
 
-        if not (-90 <= latitude <= 90):
+        # titik pertama, atau lompatan jauh (> ~500 m): langsung pindah
+        if self.pos is None or abs(lat - self.pos[0]) + abs(lon - self.pos[1]) > 0.005:
+            self.pos = (lat, lon)
+            self.move = None
+            self.show(lat, lon)
+            self.map_view.center_on(lat, lon)
+        else:
+            # selain itu: jalan pelan ke titik baru selama 0.5 - 3 detik
+            # (sesuai jarak waktu antar titik GPS, supaya gerak terus)
+            lama = 2 if self.last_ts is None else ts - self.last_ts
+            lama = max(0.5, min(3, lama))
+            self.move = (self.pos, (lat, lon), time.monotonic(), lama)
+
+        self.last_ts = ts
+        self.status.text = f"GPS Aktif\n{lat:.5f}, {lon:.5f}"
+
+    # --- 2. Geser marker sedikit demi sedikit tiap frame --------------------
+    def animate(self, dt):
+        if not self.move:
             return
-        if not (-180 <= longitude <= 180):
-            return
 
-        self.last_position = (latitude, longitude)
+        dari, ke, mulai, lama = self.move
+        k = min(1, (time.monotonic() - mulai) / lama)  # 0 -> 1
 
-        self.human_position.lat = latitude
-        self.human_position.lon = longitude
+        lat = dari[0] + (ke[0] - dari[0]) * k
+        lon = dari[1] + (ke[1] - dari[1]) * k
 
-        if not self.camera_initialized:
-            self.map_view.center_on(latitude, longitude)
-            self.camera_initialized = True
+        self.pos = (lat, lon)
+        self.show(lat, lon)
+        self.map_view.center_on(lat, lon)  # kamera ikut marker
+
+        if k >= 1:
+            self.move = None
+
+    def show(self, lat, lon):
+        """Taruh marker di (lat, lon) dan gambar ulang."""
+        self.human_position.lat = lat
+        self.human_position.lon = lon
+
+        # supaya marker tidak diam atau hilang saat lat/lon berubah
+        layer = getattr(self.human_position, "_layer", None)
+        if layer:
+            layer.reposition()
 
     def update_marker_scale(self, map_view, zoom):
         size = max(8, min(48, 24 * (2 ** (zoom - 14))))
         self.human_position.size = (size, size)
 
-    def _cancel_clocks(self):
-        for name in ("_timer", "_poll"):
+    # --- 3. Timer ------------------------------------------------------------
+    def start_timer(self):
+        self.cancel_timers()
+
+        self.started_at = time.time()
+        self.last_ts = None
+        self.pos = None
+        self.move = None
+
+        self._timer = Clock.schedule_interval(self.tick, 1)
+        self._poll = Clock.schedule_interval(self.poll_location, 0.5)
+        self._anim = Clock.schedule_interval(self.animate, 0)
+
+    def cancel_timers(self):
+        for name in ("_timer", "_poll", "_anim"):
             ev = getattr(self, name)
             if ev:
                 ev.cancel()
                 setattr(self, name, None)
 
-    def start_timer(self):
-        self.started_at = time.time()
-        self.last_position = None
-        self.camera_initialized = False
-
-        self._cancel_clocks()
-        self._timer = Clock.schedule_interval(self.tick, 1)
-        self._poll = Clock.schedule_interval(self.poll_location, 1)
-
     def tick(self, dt):
-        elapsed = int(time.time() - self.started_at)
-        hours, remainder = divmod(elapsed, 3600)
-        minutes, seconds = divmod(remainder, 60)
+        detik = int(time.time() - self.started_at)
+        jam, sisa = divmod(detik, 3600)
+        menit, detik = divmod(sisa, 60)
 
-        if self.last_position is not None:
-            lat, lon = self.last_position
-            position = f"{lat:.5f}, {lon:.5f}"
+        if self.pos:
+            posisi = f"{self.pos[0]:.5f}, {self.pos[1]:.5f}"
         else:
-            position = "Menunggu GPS..."
+            posisi = "Menunggu GPS..."
 
-        self.status.text = (
-            f"{hours:02d}:{minutes:02d}:{seconds:02d}\n{position}"
-        )
+        self.status.text = f"{jam:02d}:{menit:02d}:{detik:02d}\n{posisi}"
 
     def stop_tracking(self):
         TrackManager.stop()
-        self._cancel_clocks()
+        self.cancel_timers()
 
-        self.last_position = None
-        self.camera_initialized = False
+        self.pos = None
+        self.move = None
         self.status.text = "Perekaman dihentikan"
 
         app = MDApp.get_running_app()
@@ -141,7 +169,7 @@ class Record(MDScreen):
         app.root.ids.navbar.select("Home")
 
     def on_leave(self):
-        self._cancel_clocks()
+        self.cancel_timers()
 
 
 Builder.load_file(Paths.file("page", "Record", "page.kv"))
