@@ -1,6 +1,14 @@
 #:import Paths content.util.paths.Paths
 
 <NavBarIcon>:
+    canvas.before:
+        Color:
+            rgba: (1, 0.4, 0.13, 0.18) if root.active else (0, 0, 0, 0)
+        RoundedRectangle:
+            pos: self.x - dp(30), self.y - dp(28)
+            size: self.width + dp(59), self.height + dp(35)
+            radius: [dp(16),]
+            
     canvas.after:
         Color:
             rgba: 1, 1, 1, 1
@@ -89,9 +97,8 @@
 
     NavBarItem:
         icon_source: Paths.asset("icon", "time.png")
-        text: "Pause"
-        color_active: "#FF6822"
+        text: "Time"
+        color_active: "#ff8a54"
         opacity: 1 if root.mode == "record" else 0
         disabled: root.mode != "record"
         size_hint_x: 1 if root.mode == "record" else 0
-        on_release: root.toggle_pause()

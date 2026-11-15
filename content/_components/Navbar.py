@@ -13,6 +13,7 @@ class NavBarItem(MDNavigationItem):
     text = StringProperty()
     color_active = ColorProperty("#1E88E5") 
     color_inactive = ColorProperty("#1a1a1a")
+    active = BooleanProperty(False)
 
 class NavBar(MDNavigationBar):
     def select(self, name):

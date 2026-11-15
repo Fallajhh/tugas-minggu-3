@@ -12,6 +12,7 @@ class Paths:
 
     LOG = "log.json"
     LAST = "last.json"
+    PROFILE = "profiles.json" 
 
     @classmethod
     def database(cls, *parts):
@@ -28,7 +29,6 @@ class Paths:
 
     @classmethod
     def write_json(cls, data, *parts):
-        """Tulis atomik: file sementara dulu, lalu diganti."""
         path = cls.database(*parts)
         tmp = path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:

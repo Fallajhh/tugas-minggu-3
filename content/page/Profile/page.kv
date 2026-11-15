@@ -1,8 +1,85 @@
 <Profile>:
     MDBoxLayout:
         orientation: "vertical"
+        padding: dp(20)
+        spacing: dp(16)
         md_bg_color: self.theme_cls.backgroundColor
 
         MDLabel:
-            text: "Halaman Profile"
-            halign: "center"
+            text: "Profil Kesehatan"
+            font_style: "Title"
+            role: "large"
+            adaptive_height: True
+
+        MDBoxLayout:
+            orientation: "vertical"
+            adaptive_height: True
+            padding: dp(16)
+            spacing: dp(8)
+            radius: [dp(20)]
+            md_bg_color: app.theme_cls.surfaceContainerColor
+
+            MDLabel:
+                id: nama
+                text: "Nama: -"
+                adaptive_height: True
+
+            MDLabel:
+                id: tanggal_lahir
+                text: "Tanggal lahir: -"
+                adaptive_height: True
+
+            MDLabel:
+                id: umur
+                text: "Umur: -"
+                adaptive_height: True
+
+
+        MDBoxLayout:
+            orientation: "vertical"
+            adaptive_height: True
+            padding: dp(16)
+            spacing: dp(8)
+            radius: [dp(20)]
+            md_bg_color: app.theme_cls.surfaceContainerColor
+
+            MDLabel:
+                id: berat
+                text: "BB: -"
+                adaptive_height: True
+
+            MDLabel:
+                id: tinggi
+                text: "TB: -"
+                adaptive_height: True
+
+        MDBoxLayout:
+            orientation: "vertical"
+            adaptive_height: True
+            padding: dp(16)
+            spacing: dp(5)
+            radius: [dp(20)]
+            md_bg_color: app.theme_cls.surfaceContainerColor
+
+            MDLabel:
+                text: "Indeks Massa Tubuh"
+                font_style: "Title"
+                role: "medium"
+                adaptive_height: True
+
+            MDLabel:
+                id: imt
+                text: "-"
+                font_style: "Headline"
+                role: "large"
+                adaptive_height: True
+
+            MDLabel:
+                id: kategori
+                text: "Status gizi: -"
+                font_style: "Title"
+                role: "medium"
+                adaptive_height: True
+
+
+        Widget:

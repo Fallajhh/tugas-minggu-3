@@ -1,3 +1,72 @@
+<ModalCreateProfile>:
+    size_hint: None, None
+    width: dp(320)
+    height: content.height
+    auto_dismiss: False
+    background: ""
+    background_color: 0, 0, 0, 0
+    overlay_color: 0, 0, 0, 0.4
+
+    MDBoxLayout:
+        id: content
+        orientation: "vertical"
+        adaptive_height: True
+        padding: dp(24)
+        spacing: dp(16)
+        radius: [dp(24)]
+        md_bg_color: app.theme_cls.surfaceContainerColor
+
+        MDLabel:
+            text: "Buat Profil"
+            font_style: "Title"
+            role: "large"
+            adaptive_height: True
+
+        MDLabel:
+            text: "Isi data dirimu dulu sebelum mulai."
+            font_style: "Body"
+            role: "medium"
+            theme_text_color: "Secondary"
+            adaptive_height: True
+
+        MDTextField:
+            id: nama
+
+            MDTextFieldHintText:
+                text: "Nama"
+
+        MDTextField:
+            id: tanggal
+
+            MDTextFieldHintText:
+                text: "Tanggal lahir (dd/mm/yyyy)"
+
+        MDTextField:
+            id: berat
+            input_filter: "float"
+
+            MDTextFieldHintText:
+                text: "Berat badan (kg)"
+
+        MDTextField:
+            id: tinggi
+            input_filter: "float"
+
+            MDTextFieldHintText:
+                text: "Tinggi badan (cm)"
+
+        MDButton:
+            style: "filled"
+            theme_bg_color: "Custom"
+            md_bg_color: "#FF6822"
+            size_hint_x: 1
+            on_release: root.save()
+
+            MDButtonText:
+                text: "Simpan"
+                pos_hint: {"center_x": .5, "center_y": .5}
+
+
 <Home>:
     MDBoxLayout:
         orientation: "vertical"
@@ -6,3 +75,5 @@
         MDLabel:
             text: "Halaman Home"
             halign: "center"
+
+

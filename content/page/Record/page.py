@@ -2,8 +2,10 @@ import os
 import time
 
 from kivy.clock import Clock
+from kivy.graphics import Color, Line
 from kivy.lang import Builder
 from kivy.uix.modalview import ModalView
+from kivy_garden.mapview import MapLayer
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 
@@ -32,6 +34,41 @@ class RecordModal(ModalView):
             app.root.ids.navbar.select("Home")
 
 
+class TrackLine(MapLayer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.points = []   # titik yang sudah selesai dilalui
+        self.tail = None   # posisi marker sekarang (ujung garis)
+
+    def add_point(self, lat, lon):
+        self.points.append((lat, lon))
+
+    def clear(self):
+        self.points = []
+        self.tail = None
+        self.canvas.clear()
+
+    def reposition(self):
+        mapview = self.parent
+        if mapview is None:
+            return
+
+        semua = list(self.points)
+        if self.tail:
+            semua.append(self.tail)
+
+        koordinat = []
+        for lat, lon in semua:
+            x, y = mapview.get_window_xy_from(lat, lon, mapview.zoom)
+            koordinat += [x, y]
+
+        self.canvas.clear()
+        if len(koordinat) >= 4:
+            with self.canvas:
+                Color(1, 0.4, 0.13, 1)
+                Line(points=koordinat, width=3, cap="round", joint="round")
+
+
 class Record(MDScreen):
     _timer = None       # timer stopwatch (1 detik)
     _poll = None        # timer baca file lokasi (0.5 detik)
@@ -39,7 +76,7 @@ class Record(MDScreen):
 
     started_at = 0
     last_ts = None      # waktu titik GPS terakhir yang sudah dibaca
-    pos = None          # posisi marker yang sedang tampil: (lat, lon)
+    marker_pos = None   # posisi marker yang sedang tampil: (lat, lon)
     move = None         # gerakan berjalan: (dari, ke, waktu_mulai, durasi)
 
     def on_kv_post(self, base_widget):
@@ -47,7 +84,6 @@ class Record(MDScreen):
         self.human_position = self.ids.human_position
         self.status = self.ids.status
 
-        # folder cache tile peta yang boleh ditulis di Android
         try:
             cache = os.path.join(MDApp.get_running_app().user_data_dir, "map_cache")
             os.makedirs(cache, exist_ok=True)
@@ -58,7 +94,6 @@ class Record(MDScreen):
         self.map_view.bind(zoom=self.update_marker_scale)
         self.update_marker_scale(self.map_view, self.map_view.zoom)
 
-    # --- 1. Baca titik terbaru dari service ---------------------------------
     def poll_location(self, dt):
         p = Paths.read_json(Paths.LAST)
         if not p:
@@ -66,7 +101,7 @@ class Record(MDScreen):
 
         ts = p.get("ts", 0)
         if ts < self.started_at or ts == self.last_ts:
-            return  # titik lama atau sudah dibaca
+            return
 
         try:
             lat = float(p["lat"])
@@ -76,62 +111,63 @@ class Record(MDScreen):
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             return
 
-        # titik pertama, atau lompatan jauh (> ~500 m): langsung pindah
-        if self.pos is None or abs(lat - self.pos[0]) + abs(lon - self.pos[1]) > 0.005:
-            self.pos = (lat, lon)
+        if (
+            self.marker_pos is None
+            or abs(lat - self.marker_pos[0]) + abs(lon - self.marker_pos[1]) > 0.005
+        ):
+            self.marker_pos = (lat, lon)
             self.move = None
             self.show(lat, lon)
+            self.ids.track_line.add_point(lat, lon)
             self.map_view.center_on(lat, lon)
         else:
-            # selain itu: jalan pelan ke titik baru selama 0.5 - 3 detik
-            # (sesuai jarak waktu antar titik GPS, supaya gerak terus)
             lama = 2 if self.last_ts is None else ts - self.last_ts
             lama = max(0.5, min(3, lama))
-            self.move = (self.pos, (lat, lon), time.monotonic(), lama)
+            self.move = (self.marker_pos, (lat, lon), time.monotonic(), lama)
 
         self.last_ts = ts
         self.status.text = f"GPS Aktif\n{lat:.5f}, {lon:.5f}"
 
-    # --- 2. Geser marker sedikit demi sedikit tiap frame --------------------
     def animate(self, dt):
         if not self.move:
             return
 
         dari, ke, mulai, lama = self.move
-        k = min(1, (time.monotonic() - mulai) / lama)  # 0 -> 1
+        k = min(1, (time.monotonic() - mulai) / lama)
 
         lat = dari[0] + (ke[0] - dari[0]) * k
         lon = dari[1] + (ke[1] - dari[1]) * k
 
-        self.pos = (lat, lon)
+        self.marker_pos = (lat, lon)
         self.show(lat, lon)
-        self.map_view.center_on(lat, lon)  # kamera ikut marker
+        self.map_view.center_on(lat, lon)
 
         if k >= 1:
+            self.ids.track_line.add_point(*ke)
             self.move = None
 
     def show(self, lat, lon):
-        """Taruh marker di (lat, lon) dan gambar ulang."""
         self.human_position.lat = lat
         self.human_position.lon = lon
 
-        # supaya marker tidak diam atau hilang saat lat/lon berubah
         layer = getattr(self.human_position, "_layer", None)
         if layer:
             layer.reposition()
+            self.ids.track_line.tail = (lat, lon)
+            self.ids.track_line.reposition()
 
     def update_marker_scale(self, map_view, zoom):
         size = max(8, min(48, 24 * (2 ** (zoom - 14))))
         self.human_position.size = (size, size)
 
-    # --- 3. Timer ------------------------------------------------------------
     def start_timer(self):
         self.cancel_timers()
 
         self.started_at = time.time()
         self.last_ts = None
-        self.pos = None
+        self.marker_pos = None
         self.move = None
+        self.ids.track_line.clear()
 
         self._timer = Clock.schedule_interval(self.tick, 1)
         self._poll = Clock.schedule_interval(self.poll_location, 0.5)
@@ -149,8 +185,8 @@ class Record(MDScreen):
         jam, sisa = divmod(detik, 3600)
         menit, detik = divmod(sisa, 60)
 
-        if self.pos:
-            posisi = f"{self.pos[0]:.5f}, {self.pos[1]:.5f}"
+        if self.marker_pos:
+            posisi = f"{self.marker_pos[0]:.5f}, {self.marker_pos[1]:.5f}"
         else:
             posisi = "Menunggu GPS..."
 
@@ -160,7 +196,7 @@ class Record(MDScreen):
         TrackManager.stop()
         self.cancel_timers()
 
-        self.pos = None
+        self.marker_pos = None
         self.move = None
         self.status.text = "Perekaman dihentikan"
 
