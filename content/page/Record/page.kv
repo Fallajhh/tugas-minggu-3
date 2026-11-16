@@ -3,8 +3,6 @@
 #:import Paths content.util.paths.Paths
 
 <Record>:
-    on_enter: Factory.RecordModal().open()
-
     MapView:
         id: map_view
         lat: -6.9175
@@ -51,7 +49,7 @@
     size_hint: None, None
     width: dp(300)
     height: content.height
-    auto_dismiss: True
+    auto_dismiss: False
     background: ""
     background_color: 0, 0, 0, 0
     overlay_color: 0, 0, 0, 0.4

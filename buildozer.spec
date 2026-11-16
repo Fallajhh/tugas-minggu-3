@@ -10,7 +10,7 @@ source.exclude_dirs = .venv,.git,.github,bin,.buildozer,__pycache__
 version = 0.1
 
 requirements = python3,kivy==2.3.0,kivymd==2.0.0,materialyoucolor,materialshapes,asynckivy,asyncgui,exceptiongroup,pillow,kivy-garden.mapview,requests,plyer,pyjnius,android
-services = tracker:content/service/tracker.py:foreground:sticky
+services = tracker:content/service/tracker.py:foreground
 
 
 orientation = portrait

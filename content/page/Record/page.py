@@ -1,7 +1,10 @@
+import json
 import os
 import time
+from collections import deque
 
 from kivy.clock import Clock
+from kivy.factory import Factory
 from kivy.graphics import Color, Line
 from kivy.lang import Builder
 from kivy.uix.modalview import ModalView
@@ -11,6 +14,9 @@ from kivymd.uix.screen import MDScreen
 
 from content.util.paths import Paths
 from content.service.track_manager import TrackManager
+
+# harus sama dengan tracker.py
+LIVE_FILE = "track_live.jsonl"
 
 
 class RecordModal(ModalView):
@@ -37,8 +43,8 @@ class RecordModal(ModalView):
 class TrackLine(MapLayer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.points = []   # titik yang sudah selesai dilalui
-        self.tail = None   # posisi marker sekarang (ujung garis)
+        self.points = [] 
+        self.tail = None
 
     def add_point(self, lat, lon):
         self.points.append((lat, lon))
@@ -70,19 +76,23 @@ class TrackLine(MapLayer):
 
 
 class Record(MDScreen):
-    _timer = None       # timer stopwatch (1 detik)
-    _poll = None        # timer baca file lokasi (0.5 detik)
-    _anim = None        # timer gerak marker (tiap frame)
+    _timer = None        # timer stopwatch (1 detik)
+    _poll = None         # timer baca file live (0.3 detik)
+    _anim = None         # timer gerak marker (tiap frame)
 
+    recording = False    # True selama sesi rekam berjalan
     started_at = 0
-    last_ts = None      # waktu titik GPS terakhir yang sudah dibaca
-    marker_pos = None   # posisi marker yang sedang tampil: (lat, lon)
-    move = None         # gerakan berjalan: (dari, ke, waktu_mulai, durasi)
+    marker_pos = None    # posisi marker yang sedang tampil: (lat, lon)
+    seg = None           # segmen berjalan: (dari, ke, waktu_mulai, durasi)
+    last_play_ts = None  # ts titik terakhir yang sudah diputar
+    _offset = 0          # posisi byte terakhir yang sudah dibaca di file live
+    queue = None         # antrian titik GPS yang belum diputar
 
     def on_kv_post(self, base_widget):
         self.map_view = self.ids.map_view
         self.human_position = self.ids.human_position
         self.status = self.ids.status
+        self.queue = deque()
 
         try:
             cache = os.path.join(MDApp.get_running_app().user_data_dir, "map_cache")
@@ -94,46 +104,76 @@ class Record(MDScreen):
         self.map_view.bind(zoom=self.update_marker_scale)
         self.update_marker_scale(self.map_view, self.map_view.zoom)
 
-    def poll_location(self, dt):
-        p = Paths.read_json(Paths.LAST)
-        if not p:
-            return
+    def on_enter(self):
+        if self.recording:
+            self.resume_timers()
+        else:
+            Factory.RecordModal().open()
 
-        ts = p.get("ts", 0)
-        if ts < self.started_at or ts == self.last_ts:
-            return
+    def read_new_points(self):
+        path = Paths.database(LIVE_FILE)
+        if not os.path.exists(path):
+            return []
 
         try:
-            lat = float(p["lat"])
-            lon = float(p["lon"])
-        except (KeyError, ValueError, TypeError):
-            return
-        if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-            return
+            with open(path, "rb") as f:
+                f.seek(self._offset)
+                chunk = f.read()
+        except OSError:
+            return []
 
-        if (
-            self.marker_pos is None
-            or abs(lat - self.marker_pos[0]) + abs(lon - self.marker_pos[1]) > 0.005
-        ):
-            self.marker_pos = (lat, lon)
-            self.move = None
-            self.show(lat, lon)
-            self.ids.track_line.add_point(lat, lon)
-            self.map_view.center_on(lat, lon)
-        else:
-            lama = 2 if self.last_ts is None else ts - self.last_ts
-            lama = max(0.5, min(3, lama))
-            self.move = (self.marker_pos, (lat, lon), time.monotonic(), lama)
+        end = chunk.rfind(b"\n")
+        if end < 0:
+            return []
+        self._offset += end + 1
 
-        self.last_ts = ts
-        self.status.text = f"GPS Aktif\n{lat:.5f}, {lon:.5f}"
+        hasil = []
+        for baris in chunk[:end].split(b"\n"):
+            try:
+                p = json.loads(baris)
+                lat = float(p["lat"])
+                lon = float(p["lon"])
+                ts = float(p.get("ts", 0))
+            except (ValueError, KeyError, TypeError):
+                continue
+            if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+                continue
+            if ts < self.started_at - 1:
+                continue
+            hasil.append((lat, lon, ts))
+        return hasil
+
+    def poll_location(self, dt):
+        for titik in self.read_new_points():
+            self.queue.append(titik)
 
     def animate(self, dt):
-        if not self.move:
-            return
+        now = time.monotonic()
 
-        dari, ke, mulai, lama = self.move
-        k = min(1, (time.monotonic() - mulai) / lama)
+        if self.seg is None:
+            if not self.queue:
+                return
+
+            lat, lon, ts = self.queue.popleft()
+            if (
+                self.marker_pos is None
+                or abs(lat - self.marker_pos[0]) + abs(lon - self.marker_pos[1]) > 0.005
+            ):
+                self.marker_pos = (lat, lon)
+                self.last_play_ts = ts
+                self.ids.track_line.add_point(lat, lon)
+                self.show(lat, lon)
+                self.map_view.center_on(lat, lon)
+                return
+
+            gap = 1.0 if self.last_play_ts is None else ts - self.last_play_ts
+            gap = max(0.3, min(3.0, gap))
+            gap /= 1 + len(self.queue)
+            self.last_play_ts = ts
+            self.seg = (self.marker_pos, (lat, lon), now, gap)
+
+        dari, ke, mulai, lama = self.seg
+        k = min(1.0, (now - mulai) / lama)
 
         lat = dari[0] + (ke[0] - dari[0]) * k
         lon = dari[1] + (ke[1] - dari[1]) * k
@@ -144,7 +184,7 @@ class Record(MDScreen):
 
         if k >= 1:
             self.ids.track_line.add_point(*ke)
-            self.move = None
+            self.seg = None
 
     def show(self, lat, lon):
         self.human_position.lat = lat
@@ -163,14 +203,47 @@ class Record(MDScreen):
     def start_timer(self):
         self.cancel_timers()
 
+        self.recording = True
         self.started_at = time.time()
-        self.last_ts = None
+        self.queue = deque()
         self.marker_pos = None
-        self.move = None
+        self.seg = None
+        self.last_play_ts = None
+        self._offset = 0
         self.ids.track_line.clear()
 
+        try:
+            open(Paths.database(LIVE_FILE), "wb").close()
+        except OSError as e:
+            print("[record] gagal reset file live:", e)
+
+        self._schedule()
+
+    def resume_timers(self):
+        pending = []
+        if self.seg:
+            pending.append((*self.seg[1], 0))
+        pending += list(self.queue)
+        pending += self.read_new_points()
+
+        self.queue = deque()
+        self.seg = None
+
+        if pending:
+            for lat, lon, _ in pending:
+                self.ids.track_line.add_point(lat, lon)
+            lat, lon, ts = pending[-1]
+            self.marker_pos = (lat, lon)
+            self.last_play_ts = ts
+            self.show(lat, lon)
+            self.map_view.center_on(lat, lon)
+
+        self.cancel_timers()
+        self._schedule()
+
+    def _schedule(self):
         self._timer = Clock.schedule_interval(self.tick, 1)
-        self._poll = Clock.schedule_interval(self.poll_location, 0.5)
+        self._poll = Clock.schedule_interval(self.poll_location, 0.3)
         self._anim = Clock.schedule_interval(self.animate, 0)
 
     def cancel_timers(self):
@@ -196,8 +269,10 @@ class Record(MDScreen):
         TrackManager.stop()
         self.cancel_timers()
 
+        self.recording = False
+        self.queue = deque()
         self.marker_pos = None
-        self.move = None
+        self.seg = None
         self.status.text = "Perekaman dihentikan"
 
         app = MDApp.get_running_app()
