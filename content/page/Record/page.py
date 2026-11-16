@@ -7,6 +7,7 @@ from kivy.clock import Clock
 from kivy.factory import Factory
 from kivy.graphics import Color, Line
 from kivy.lang import Builder
+from kivy.properties import BooleanProperty
 from kivy.uix.modalview import ModalView
 from kivy_garden.mapview import MapLayer
 from kivymd.app import MDApp
@@ -15,8 +16,7 @@ from kivymd.uix.screen import MDScreen
 from content.util.paths import Paths
 from content.service.track_manager import TrackManager
 
-# harus sama dengan tracker.py
-LIVE_FILE = "track_live.jsonl"
+LIVE_FILE = "track.jsonl"
 
 
 class RecordModal(ModalView):
@@ -41,16 +41,22 @@ class RecordModal(ModalView):
 
 
 class TrackLine(MapLayer):
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.points = [] 
+        self.segments = [[]]
         self.tail = None
 
     def add_point(self, lat, lon):
-        self.points.append((lat, lon))
+        self.segments[-1].append((lat, lon))
+
+    def break_line(self):
+        if self.segments[-1]:
+            self.segments.append([])
+        self.tail = None
 
     def clear(self):
-        self.points = []
+        self.segments = [[]]
         self.tail = None
         self.canvas.clear()
 
@@ -59,34 +65,39 @@ class TrackLine(MapLayer):
         if mapview is None:
             return
 
-        semua = list(self.points)
-        if self.tail:
-            semua.append(self.tail)
-
-        koordinat = []
-        for lat, lon in semua:
-            x, y = mapview.get_window_xy_from(lat, lon, mapview.zoom)
-            koordinat += [x, y]
-
         self.canvas.clear()
-        if len(koordinat) >= 4:
-            with self.canvas:
-                Color(1, 0.4, 0.13, 1)
+        with self.canvas:
+            Color(1, 0.4, 0.13, 1)
+            for i, seg in enumerate(self.segments):
+                pts = list(seg)
+                if i == len(self.segments) - 1 and self.tail:
+                    pts.append(self.tail)
+                if len(pts) < 2:
+                    continue
+                koordinat = []
+                for lat, lon in pts:
+                    x, y = mapview.get_window_xy_from(lat, lon, mapview.zoom)
+                    koordinat += [x, y]
                 Line(points=koordinat, width=3, cap="round", joint="round")
 
 
 class Record(MDScreen):
-    _timer = None        # timer stopwatch (1 detik)
-    _poll = None         # timer baca file live (0.3 detik)
-    _anim = None         # timer gerak marker (tiap frame)
+    _timer = None
+    _poll = None
+    _anim = None
 
-    recording = False    # True selama sesi rekam berjalan
+    recording = BooleanProperty(False)
     started_at = 0
-    marker_pos = None    # posisi marker yang sedang tampil: (lat, lon)
-    seg = None           # segmen berjalan: (dari, ke, waktu_mulai, durasi)
-    last_play_ts = None  # ts titik terakhir yang sudah diputar
-    _offset = 0          # posisi byte terakhir yang sudah dibaca di file live
-    queue = None         # antrian titik GPS yang belum diputar
+    marker_pos = None
+    seg = None
+    last_play_ts = None
+    _offset = 0
+    queue = None
+    cur_sid = None
+    centered = False
+    paused = BooleanProperty(False)
+    pause_start = 0
+    paused_total = 0
 
     def on_kv_post(self, base_widget):
         self.map_view = self.ids.map_view
@@ -131,17 +142,37 @@ class Record(MDScreen):
         for baris in chunk[:end].split(b"\n"):
             try:
                 p = json.loads(baris)
+            except ValueError:
+                continue
+            if "ev" in p:
+                self.handle_event(p)
+                continue
+            try:
                 lat = float(p["lat"])
                 lon = float(p["lon"])
                 ts = float(p.get("ts", 0))
+                sid = p.get("seg", 0)
             except (ValueError, KeyError, TypeError):
                 continue
             if not (-90 <= lat <= 90 and -180 <= lon <= 180):
                 continue
             if ts < self.started_at - 1:
                 continue
-            hasil.append((lat, lon, ts))
+            hasil.append((lat, lon, ts, sid))
         return hasil
+
+    def handle_event(self, p):
+        try:
+            ts = float(p.get("ts", time.time()))
+        except (ValueError, TypeError):
+            return
+        ev = p.get("ev")
+        if ev == "pause" and not self.paused:
+            self.paused = True
+            self.pause_start = ts
+        elif ev == "resume" and self.paused:
+            self.paused_total += max(0, ts - self.pause_start)
+            self.paused = False
 
     def poll_location(self, dt):
         for titik in self.read_new_points():
@@ -154,16 +185,17 @@ class Record(MDScreen):
             if not self.queue:
                 return
 
-            lat, lon, ts = self.queue.popleft()
-            if (
-                self.marker_pos is None
-                or abs(lat - self.marker_pos[0]) + abs(lon - self.marker_pos[1]) > 0.005
-            ):
+            lat, lon, ts, sid = self.queue.popleft()
+            if sid != self.cur_sid or self.marker_pos is None:
+                self.cur_sid = sid
+                self.ids.track_line.break_line()
                 self.marker_pos = (lat, lon)
                 self.last_play_ts = ts
                 self.ids.track_line.add_point(lat, lon)
                 self.show(lat, lon)
-                self.map_view.center_on(lat, lon)
+                if not self.centered:
+                    self.centered = True
+                    self.map_view.center_on(lat, lon)
                 return
 
             gap = 1.0 if self.last_play_ts is None else ts - self.last_play_ts
@@ -180,7 +212,6 @@ class Record(MDScreen):
 
         self.marker_pos = (lat, lon)
         self.show(lat, lon)
-        self.map_view.center_on(lat, lon)
 
         if k >= 1:
             self.ids.track_line.add_point(*ke)
@@ -209,20 +240,27 @@ class Record(MDScreen):
         self.marker_pos = None
         self.seg = None
         self.last_play_ts = None
-        self._offset = 0
+        self.cur_sid = None
+        self.centered = False
+        self.paused = False
+        self.pause_start = 0
+        self.paused_total = 0
         self.ids.track_line.clear()
 
         try:
-            open(Paths.database(LIVE_FILE), "wb").close()
+            path = Paths.database(LIVE_FILE)
+            open(path, "ab").close()
+            self._offset = os.path.getsize(path)
         except OSError as e:
-            print("[record] gagal reset file live:", e)
+            print("[record] gagal siapkan file track:", e)
+            self._offset = 0
 
         self._schedule()
 
     def resume_timers(self):
         pending = []
         if self.seg:
-            pending.append((*self.seg[1], 0))
+            pending.append((*self.seg[1], 0, self.cur_sid))
         pending += list(self.queue)
         pending += self.read_new_points()
 
@@ -230,13 +268,15 @@ class Record(MDScreen):
         self.seg = None
 
         if pending:
-            for lat, lon, _ in pending:
+            for lat, lon, _, sid in pending:
+                if sid != self.cur_sid:
+                    self.ids.track_line.break_line()
+                    self.cur_sid = sid
                 self.ids.track_line.add_point(lat, lon)
-            lat, lon, ts = pending[-1]
+            lat, lon, ts, _ = pending[-1]
             self.marker_pos = (lat, lon)
             self.last_play_ts = ts
             self.show(lat, lon)
-            self.map_view.center_on(lat, lon)
 
         self.cancel_timers()
         self._schedule()
@@ -254,7 +294,9 @@ class Record(MDScreen):
                 setattr(self, name, None)
 
     def tick(self, dt):
-        detik = int(time.time() - self.started_at)
+        now = time.time()
+        diam = self.paused_total + (now - self.pause_start if self.paused else 0)
+        detik = int(max(0, now - self.started_at - diam))
         jam, sisa = divmod(detik, 3600)
         menit, detik = divmod(sisa, 60)
 
@@ -263,7 +305,10 @@ class Record(MDScreen):
         else:
             posisi = "Menunggu GPS..."
 
-        self.status.text = f"{jam:02d}:{menit:02d}:{detik:02d}\n{posisi}"
+        waktu = f"{jam:02d}:{menit:02d}:{detik:02d}"
+        if self.paused:
+            waktu += "  (jeda otomatis)"
+        self.status.text = f"{waktu}\n{posisi}"
 
     def stop_tracking(self):
         TrackManager.stop()

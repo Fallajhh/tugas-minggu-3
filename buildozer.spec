@@ -25,6 +25,9 @@ android.presplash_color = #FFFFFF
 # Rilis terbaru memakai Python 3.14 yang belum didukung Kivy 2.3.0.
 p4a.branch = v2024.01.21
 
+android.gradle_dependencies = com.google.android.gms:play-services-location:21.3.0
+android.enable_androidx = True
+
 android.api = 34
 android.minapi = 24
 android.ndk = 25b

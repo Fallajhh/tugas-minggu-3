@@ -1,85 +1,108 @@
 <Profile>:
     MDBoxLayout:
         orientation: "vertical"
-        padding: dp(20)
-        spacing: dp(16)
+        padding: [0, dp(48), 0, 0]
         md_bg_color: self.theme_cls.backgroundColor
 
-        MDLabel:
-            text: "Profil Kesehatan"
-            font_style: "Title"
-            role: "large"
-            adaptive_height: True
+        MDBoxLayout:
+            id: header
+            size_hint_y: None
+            height: dp(96)
+            padding: [dp(24), 0, dp(24), 0]
+            spacing: dp(12)
+
+            canvas.before:
+                Color:
+                    rgba: app.theme_cls.outlineVariantColor
+                Line:
+                    width: dp(1.2)
+                    bezier: [self.x, self.center_y + dp(14), self.x, self.center_y + dp(14) * 0.45, self.x + dp(14) * 0.45, self.center_y, self.x + dp(14), self.center_y]
+                Line:
+                    width: dp(1.2)
+                    points: [self.x + dp(14), self.center_y, self.right - dp(14), self.center_y]
+                Line:
+                    width: dp(1.2)
+                    bezier: [self.right - dp(14), self.center_y, self.right - dp(14) * 0.45, self.center_y, self.right, self.center_y + dp(14) * 0.45, self.right, self.center_y + dp(14)]
+
+            MDBoxLayout:
+                size_hint: None, None
+                size: dp(80), dp(80)
+                pos_hint: {"center_y": .5}
+                radius: [dp(40)]
+                md_bg_color: app.theme_cls.surfaceContainerHighestColor
+
+            MDBoxLayout:
+                size_hint_y: None
+                height: dp(36)
+                pos_hint: {"center_y": .5}
+                padding: [dp(12), 0, dp(12), 0]
+                radius: [dp(8)]
+                md_bg_color: app.theme_cls.surfaceContainerHighestColor
+
+                MDLabel:
+                    id: nama
+                    text: "NAMA"
+                    valign: "center"
+                    shorten: True
+                    shorten_from: "right"
 
         MDBoxLayout:
             orientation: "vertical"
-            adaptive_height: True
-            padding: dp(16)
-            spacing: dp(8)
-            radius: [dp(20)]
-            md_bg_color: app.theme_cls.surfaceContainerColor
+            padding: [dp(20), dp(24), dp(20), dp(20)]
+            spacing: dp(12)
 
-            MDLabel:
-                id: nama
-                text: "Nama: -"
+            MDBoxLayout:
+                orientation: "vertical"
                 adaptive_height: True
+                padding: dp(16)
+                spacing: dp(6)
+                radius: [dp(12)]
+                md_bg_color: app.theme_cls.surfaceContainerColor
 
-            MDLabel:
-                id: tanggal_lahir
-                text: "Tanggal lahir: -"
+                MDLabel:
+                    id: berat
+                    text: "BB: -"
+                    adaptive_height: True
+
+                MDLabel:
+                    id: tinggi
+                    text: "TB: -"
+                    adaptive_height: True
+
+                MDLabel:
+                    id: kategori
+                    text: "Status: -"
+                    adaptive_height: True
+
+            MDBoxLayout:
+                orientation: "vertical"
                 adaptive_height: True
+                padding: dp(16)
+                spacing: dp(6)
+                radius: [dp(12)]
+                md_bg_color: app.theme_cls.surfaceContainerColor
 
-            MDLabel:
-                id: umur
-                text: "Umur: -"
-                adaptive_height: True
+                MDLabel:
+                    text: "Indeks Massa Tubuh"
+                    font_style: "Title"
+                    role: "medium"
+                    adaptive_height: True
 
+                MDLabel:
+                    id: imt
+                    text: "-"
+                    font_style: "Headline"
+                    role: "large"
+                    adaptive_height: True
 
-        MDBoxLayout:
-            orientation: "vertical"
-            adaptive_height: True
-            padding: dp(16)
-            spacing: dp(8)
-            radius: [dp(20)]
-            md_bg_color: app.theme_cls.surfaceContainerColor
+                MDLabel:
+                    id: tanggal_lahir
+                    text: "Tanggal lahir: -"
+                    adaptive_height: True
 
-            MDLabel:
-                id: berat
-                text: "BB: -"
-                adaptive_height: True
+                MDLabel:
+                    id: umur
+                    text: "Umur: -"
+                    adaptive_height: True
 
-            MDLabel:
-                id: tinggi
-                text: "TB: -"
-                adaptive_height: True
-
-        MDBoxLayout:
-            orientation: "vertical"
-            adaptive_height: True
-            padding: dp(16)
-            spacing: dp(5)
-            radius: [dp(20)]
-            md_bg_color: app.theme_cls.surfaceContainerColor
-
-            MDLabel:
-                text: "Indeks Massa Tubuh"
-                font_style: "Title"
-                role: "medium"
-                adaptive_height: True
-
-            MDLabel:
-                id: imt
-                text: "-"
-                font_style: "Headline"
-                role: "large"
-                adaptive_height: True
-
-            MDLabel:
-                id: kategori
-                text: "Status gizi: -"
-                font_style: "Title"
-                role: "medium"
-                adaptive_height: True
-
-
-        Widget:
+            Widget:

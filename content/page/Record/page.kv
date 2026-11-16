@@ -32,6 +32,8 @@
         width: dp(200)
         pos_hint: {"center_x": .5}
         y: dp(96)
+        opacity: 1 if root.recording else 0
+        disabled: not root.recording
         on_release: root.stop_tracking()
 
         MDButtonText:

@@ -1,3 +1,4 @@
+import atexit
 import subprocess
 import sys
 
@@ -7,7 +8,7 @@ from content.util.paths import Paths
 
 
 class TrackManager:
-    _proc = None  # hanya dipakai di desktop (mode tes)
+    _proc = None
 
     @staticmethod
     def _service():
@@ -20,10 +21,14 @@ class TrackManager:
     @staticmethod
     def start():
         if platform != "android":
+            if TrackManager._proc and TrackManager._proc.poll() is None:
+                return
             try:
                 TrackManager._proc = subprocess.Popen(
-                    [sys.executable, Paths.file("service", "tracker.py")]
+                    [sys.executable, Paths.file("service", "tracker.py"), "--watch-parent"],
+                    stdin=subprocess.PIPE,
                 )
+                atexit.register(TrackManager.stop)
                 print("[TrackManager] desktop: tracker tes dijalankan")
             except Exception as e:
                 print("[TrackManager] gagal start tracker tes:", repr(e))
