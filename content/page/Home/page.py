@@ -7,7 +7,7 @@ from kivy.uix.modalview import ModalView
 from kivymd.uix.screen import MDScreen
 
 from content.util.paths import Paths
-from content.service.profile import Profiles
+from content.service.profile_manager import Profiles
 
 
 class ModalCreateProfile(ModalView):

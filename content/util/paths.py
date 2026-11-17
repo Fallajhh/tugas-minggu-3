@@ -10,9 +10,10 @@ class Paths:
     ASSETS_DIR = os.path.join(BASE_DIR, "assets")
     DATABASE_DIR = os.path.join(os.environ.get("ANDROID_PRIVATE", BASE_DIR), "data")
 
-    LOG = "log.json"
-    LAST = "last.json"
-    PROFILE = "profiles.json" 
+    TRACK = "track.jsonl"
+    PROFILE = "profiles.json"
+    SCHEDULES = "schedules.json"
+    HISTORY = "history.json"
 
     @classmethod
     def database(cls, *parts):

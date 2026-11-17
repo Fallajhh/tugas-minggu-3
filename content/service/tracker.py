@@ -11,45 +11,23 @@ ROOT = os.path.dirname(
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from content.util.math_location import distance_m, is_valid_coord
 from content.util.paths import Paths
 
-LIVE_FILE = "track.jsonl"
+LIVE_FILE = Paths.TRACK
 
 MAX_ACCURACY = 25.0
 MAX_AGE = 10.0
-MIN_MOVE = 3.0
+MIN_MOVE = 5.0 
+PAUSE_MOVE = 6.0
 MAX_SPEED = 15.0
 PROCESS_NOISE = 3.0
 GAP_BREAK = 15.0
 WATCHDOG_STALE = 20.0
 PAUSE_AFTER = 8.0
 
-
-def distance_m(lat1, lon1, lat2, lon2):
-    r = 6371000.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = p2 - p1
-    dl = math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
-
-
-def read_last_point():
-    path = Paths.database(LIVE_FILE)
-    try:
-        with open(path, "rb") as f:
-            f.seek(0, 2)
-            size = f.tell()
-            f.seek(max(0, size - 1024))
-            lines = f.read().splitlines()
-    except OSError:
-        return None
-    for baris in reversed(lines):
-        try:
-            return json.loads(baris)
-        except ValueError:
-            continue
-    return None
+GPS_INTERVAL_MS = 1500 
+USE_WAKELOCK = False
 
 
 class Pipeline:
@@ -65,9 +43,13 @@ class Pipeline:
         self.last_fix = time.time()
         self.paused = False
         self.last_move = 0.0
+        self.move_ref = None
         self.live_path = Paths.database(LIVE_FILE)
 
     def feed(self, lat, lon, acc, t):
+        if not is_valid_coord(lat, lon):
+            return
+
         if not acc or acc <= 0:
             acc = 10.0
 
@@ -103,19 +85,35 @@ class Pipeline:
         self.var = (1 - k) * self.var
         self.t = t
 
+        self._update_pause(acc, t)
+
         if self.saved is not None:
             d = distance_m(self.saved[0], self.saved[1], self.lat, self.lon)
             if d < max(MIN_MOVE, acc * 0.5):
-                if not self.paused and t - self.last_move >= PAUSE_AFTER:
-                    self.paused = True
-                    self._append({"ev": "pause", "ts": self.last_move})
                 return
 
         self._save(self.lat, self.lon, acc, t)
 
+    def _update_pause(self, acc, t):
+        d = distance_m(self.move_ref[0], self.move_ref[1], self.lat, self.lon)
+        if d >= max(PAUSE_MOVE, acc * 0.5):
+            self.move_ref = (self.lat, self.lon)
+            self.last_move = t
+            if self.paused:
+                self.paused = False
+                self._append({"ev": "resume", "ts": t})
+        elif not self.paused and t - self.last_move >= PAUSE_AFTER:
+            self.paused = True
+            self._append({"ev": "pause", "ts": self.last_move})
+
     def _new_segment(self, lat, lon, acc, t):
         self.lat, self.lon, self.var, self.t = lat, lon, acc * acc, t
         self.rejects = 0
+        self.move_ref = (lat, lon)
+        self.last_move = t
+        if self.paused:
+            self.paused = False
+            self._append({"ev": "resume", "ts": t})
         self.sid = int(t)
         self._save(lat, lon, acc, t)
 
@@ -123,14 +121,9 @@ class Pipeline:
         line = json.dumps(data) + "\n"
         with open(self.live_path, "ab") as f:
             f.write(line.encode("utf-8"))
-            f.flush()
 
     def _save(self, lat, lon, acc, t):
         self.saved = (lat, lon)
-        self.last_move = t
-        if self.paused:
-            self.paused = False
-            self._append({"ev": "resume", "ts": t})
         self._append(
             {
                 "lat": round(lat, 7),
@@ -140,7 +133,6 @@ class Pipeline:
                 "seg": self.sid,
             }
         )
-        print(f"[tracker] seg={self.sid} -> {lat:.6f}, {lon:.6f}")
 
 
 def run_android():
@@ -154,10 +146,12 @@ def run_android():
 
     service = PythonService.mService
 
-    pm = service.getSystemService(Context.POWER_SERVICE)
-    wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jagjag:tracker")
-    wake.acquire()
-    print("[tracker] wakelock aktif")
+    wake = None
+    if USE_WAKELOCK:
+        pm = service.getSystemService(Context.POWER_SERVICE)
+        wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jagjag:tracker")
+        wake.acquire()
+        print("[tracker] wakelock aktif")
 
     pipe = Pipeline()
     need_restart = threading.Event()
@@ -205,7 +199,11 @@ def run_android():
                 return None
             LocationServices = autoclass("com.google.android.gms.location.LocationServices")
             Builder = autoclass("com.google.android.gms.location.LocationRequest$Builder")
-            request = Builder(100, 1000).setMinUpdateIntervalMillis(500).build()
+            request = (
+                Builder(100, GPS_INTERVAL_MS)
+                .setMinUpdateIntervalMillis(GPS_INTERVAL_MS // 2)
+                .build()
+            )
             client = LocationServices.getFusedLocationProviderClient(service)
             return client, request
         except Exception as e:
@@ -222,15 +220,17 @@ def run_android():
                 return True
             except Exception as e:
                 print("[tracker] fused gagal, pakai LocationManager:", e)
-        started = False
-        for provider in (LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER):
-            try:
-                lm.requestLocationUpdates(provider, 1000, 0.0, listener, looper)
-                print(f"[tracker] listen provider: {provider}")
-                started = True
-            except Exception as e:
-                print(f"[tracker] provider {provider} gagal: {e}")
-        return started
+        # Fallback: hanya GPS. Provider network akurasinya hampir selalu
+        # ditolak (> MAX_ACCURACY), jadi cuma buang baterai.
+        try:
+            lm.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER, GPS_INTERVAL_MS, 0.0, listener, looper
+            )
+            print("[tracker] listen provider: gps")
+            return True
+        except Exception as e:
+            print(f"[tracker] provider gps gagal: {e}")
+            return False
 
     def unregister():
         if fused:
@@ -253,7 +253,7 @@ def run_android():
 
         def watchdog():
             while not stop.is_set():
-                need_restart.wait(5)
+                need_restart.wait(10)
                 if stop.is_set():
                     break
                 stale = time.time() - pipe.last_fix > WATCHDOG_STALE
@@ -272,7 +272,7 @@ def run_android():
         stop.set()
         need_restart.set()
         unregister()
-        if wake.isHeld():
+        if wake is not None and wake.isHeld():
             wake.release()
 
 
