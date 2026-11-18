@@ -25,18 +25,50 @@ ORANGE = (1, 0.4, 0.13, 1)
 
 
 class RecordModal(ModalView):
-    started = False
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.started = False
 
     def on_start(self):
-        self.started = True
+        if self.started:
+            return
 
+        if not TrackManager.has_permission():
+            TrackManager.ask_permission(self._after_permission)
+            return
+
+        if not TrackManager.gps_enabled():
+            self._warn("GPS mati. Nyalakan lokasi dulu, lalu tekan Start.")
+            return
+
+        self._begin()
+
+    def _after_permission(self, granted):
+        if granted:
+            self.on_start()
+        else:
+            self._warn("Izin lokasi diperlukan untuk merekam.")
+
+    def _begin(self):
         app = MDApp.get_running_app()
         record = app.root.ids.screen_manager.get_screen("Record")
 
-        record.start_timer()
-        TrackManager.start()
+        if not TrackManager.start():
+            self._warn("Gagal menjalankan perekaman.")
+            return
 
+        record.start_timer()
+        self.started = True
         self.dismiss()
+
+    def _warn(self, text):
+        from kivymd.uix.snackbar import MDSnackbar, MDSnackbarText
+        MDSnackbar(
+            MDSnackbarText(text=text),
+            y=dp(24),
+            pos_hint={"center_x": .5},
+            size_hint_x=.9,
+        ).open()
 
     def on_dismiss(self):
         if not self.started:
@@ -44,12 +76,7 @@ class RecordModal(ModalView):
             app.root.ids.screen_manager.current = "Home"
             app.root.ids.navbar.select("Home")
 
-
 class TrackLine(MapLayer):
-    """Garis jalur. Titik baru hanya DITAMBAHKAN ke Line (murah).
-    Ekor pendek (titik terakhir -> marker) menyambung garis selama animasi.
-    Gambar ulang penuh hanya saat peta digeser / di-zoom."""
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.segments = [[]]

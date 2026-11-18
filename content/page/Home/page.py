@@ -1,19 +1,89 @@
-from datetime import datetime
+from datetime import datetime, date
 
 from kivy.clock import Clock
 from kivy.lang import Builder
+from kivy.properties import StringProperty
 from kivy.uix.modalview import ModalView
 
 from kivymd.uix.screen import MDScreen
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.relativelayout import MDRelativeLayout  # noqa: F401 (dipakai di .kv)
+from kivymd.uix.label import MDLabel, MDIcon  # noqa: F401
+from kivymd.uix.textfield import MDTextField, MDTextFieldTrailingIcon  # noqa: F401
+from kivymd.uix.button import MDButton, MDButtonText, MDIconButton  # noqa: F401
+from kivymd.uix.scrollview import MDScrollView  # noqa: F401
+from kivymd.uix.divider import MDDivider  # noqa: F401
+from kivymd.uix.pickers import MDModalDatePicker
 
 from content.util.paths import Paths
 from content.service.profile_manager import Profiles
+from content.service.weather_manager import WeatherManager
+
+
+def _num(value, suffix=""):
+    try:
+        return f"{round(float(value))}{suffix}"
+    except (TypeError, ValueError):
+        return "-"
+
+
+class WeatherSlotCard(MDBoxLayout):
+    stamp = StringProperty()
+    icon = StringProperty("weather-cloudy")
+    temp = StringProperty()
+    desc = StringProperty()
+
+
+class WeatherStat(MDBoxLayout):
+    icon = StringProperty()
+    value = StringProperty()
+    caption = StringProperty()
 
 
 class ModalCreateProfile(ModalView):
 
     auto_dismiss = False
+    _date_picker = None
 
+    # ------------------------------------------------------------------
+    # Date picker tanggal lahir
+    # ------------------------------------------------------------------
+    def open_date_picker(self):
+        field = self.ids.tanggal
+        field.focus = False  # supaya field bisa diketuk lagi nanti
+
+        if self._date_picker and self._date_picker.parent:
+            return
+
+        # Mulai dari tanggal yang sudah dipilih, atau default 01/01/2000
+        try:
+            d = datetime.strptime(field.text, "%d/%m/%Y").date()
+        except (ValueError, TypeError):
+            d = date(2000, 1, 1)
+
+        picker = MDModalDatePicker(
+            year=d.year,
+            month=d.month,
+            day=d.day,
+            max_date=date.today(),  # tidak boleh pilih tanggal masa depan
+        )
+        picker.bind(
+            on_ok=self._on_date_ok,
+            on_cancel=lambda inst, *a: inst.dismiss(),
+        )
+        self._date_picker = picker
+        picker.open()
+
+    def _on_date_ok(self, picker, *args):
+        selected = picker.get_date()
+        if selected:
+            self.ids.tanggal.text = selected[0].strftime("%d/%m/%Y")
+            self.ids.tanggal.error = False
+        picker.dismiss()
+
+    # ------------------------------------------------------------------
+    # Simpan
+    # ------------------------------------------------------------------
     def save(self):
         nama = self.ids.nama.text.strip()
         tanggal = self.ids.tanggal.text.strip()
@@ -62,17 +132,27 @@ class ModalCreateProfile(ModalView):
             return
 
         self.dismiss()
-        
 
 
 class Home(MDScreen):
+
+    weather_location = StringProperty("Memuat lokasi...")
+    weather_temp = StringProperty("--°")
+    weather_desc = StringProperty("Memuat cuaca...")
+    weather_icon = StringProperty("weather-cloudy")
+    weather_hu = StringProperty("-")
+    weather_ws = StringProperty("-")
+    weather_tcc = StringProperty("-")
+    weather_status = StringProperty("")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.profile_modal = None
         self.profile_event = None
+        self._weather_loading = False
 
     def on_enter(self, *args):
+        self.refresh_weather()
 
         if Profiles.Exists():
             return
@@ -100,6 +180,57 @@ class Home(MDScreen):
 
         self.profile_modal = ModalCreateProfile()
         self.profile_modal.open()
+
+    # ------------------------------------------------------------------
+    # Cuaca
+    # ------------------------------------------------------------------
+    def refresh_weather(self, force=False):
+        if self._weather_loading:
+            return
+        self._weather_loading = True
+        self.weather_status = "Memuat cuaca..."
+        WeatherManager.fetch(self._on_weather, force=force)
+
+    def _on_weather(self, result, error):
+        self._weather_loading = False
+
+        if not result:
+            self.weather_status = "Gagal memuat cuaca. Periksa koneksi internet."
+            return
+
+        now_slot, upcoming = WeatherManager.select(result["slots"])
+        now_dt = WeatherManager._dt(now_slot["dt"])
+
+        self.weather_location = result["location"]
+        self.weather_temp = _num(now_slot["t"], "°")
+        self.weather_desc = now_slot["desc"] or "-"
+        self.weather_icon = WeatherManager.icon_for(now_slot["desc"], now_dt.hour)
+        self.weather_hu = _num(now_slot["hu"], "%")
+        self.weather_ws = _num(now_slot["ws"], " km/j")
+        self.weather_tcc = _num(now_slot["tcc"], "%")
+
+        if result.get("stale"):
+            self.weather_status = "Data tersimpan (offline) · Sumber: BMKG"
+        else:
+            jam = datetime.fromtimestamp(result["fetched_at"]).strftime("%H:%M")
+            self.weather_status = f"Diperbarui {jam} · Sumber: BMKG"
+
+        row = self.ids.forecast_row
+        row.clear_widgets()
+
+        today = datetime.now().date()
+        for slot in upcoming:
+            dt = WeatherManager._dt(slot["dt"])
+            stamp = dt.strftime("%H:%M")
+            if dt.date() != today:
+                stamp = "Bsk " + stamp
+
+            row.add_widget(WeatherSlotCard(
+                stamp=stamp,
+                icon=WeatherManager.icon_for(slot["desc"], dt.hour),
+                temp=_num(slot["t"], "°"),
+                desc=slot["desc"] or "-",
+            ))
 
 
 Builder.load_file(

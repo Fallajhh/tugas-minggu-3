@@ -11,5 +11,3 @@ from kivy.core.window import Window
 
 Window.clearcolor = (1, 1, 1, 1)
 
-
-API_KEY_MAP = "d7aca19f-21d5-46ad-a797-10831ea5cd14"
