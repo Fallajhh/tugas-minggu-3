@@ -26,7 +26,7 @@ GAP_BREAK = 15.0
 WATCHDOG_STALE = 20.0
 PAUSE_AFTER = 8.0
 
-GPS_INTERVAL_MS = 1500 
+GPS_INTERVAL_MS = 1500
 USE_WAKELOCK = False
 
 
@@ -151,11 +151,11 @@ def run_android():
         pm = service.getSystemService(Context.POWER_SERVICE)
         wake = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jagjag:tracker")
         wake.acquire()
-        print("[tracker] wakelock aktif")
+
 
     pipe = Pipeline()
-    need_restart = threading.Event()
     stop = threading.Event()
+    need_restart = threading.Event()
 
     class Listener(PythonJavaClass):
         __javainterfaces__ = ["android/location/LocationListener"]
@@ -163,8 +163,8 @@ def run_android():
 
         @java_method("(Landroid/location/Location;)V")
         def onLocationChanged(self, loc):
-            pipe.last_fix = time.time()
             try:
+                pipe.last_fix = time.time()
                 acc = loc.getAccuracy() if loc.hasAccuracy() else None
                 pipe.feed(
                     loc.getLatitude(),
@@ -220,8 +220,6 @@ def run_android():
                 return True
             except Exception as e:
                 print("[tracker] fused gagal, pakai LocationManager:", e)
-        # Fallback: hanya GPS. Provider network akurasinya hampir selalu
-        # ditolak (> MAX_ACCURACY), jadi cuma buang baterai.
         try:
             lm.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER, GPS_INTERVAL_MS, 0.0, listener, looper

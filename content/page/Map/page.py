@@ -16,14 +16,12 @@ MIN_ALPHA = 0.12
 
 
 def age_alpha(days):
-    """Hari ini penuh, kemarin 0.6, lalu makin pudar."""
     if days <= 0:
         return 1.0
     return max(MIN_ALPHA, 0.6 / days)
 
 
 class HistoryLayer(MapLayer):
-    """Menggambar semua jalur riwayat + label tanggal dalam satu canvas."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -34,7 +32,6 @@ class HistoryLayer(MapLayer):
         today = datetime.date.today()
         items = []
 
-        # Dari yang paling lama, supaya jalur terbaru tergambar di atas.
         for entry in reversed(entries):
             try:
                 day = datetime.date.fromisoformat(entry["date"])
@@ -90,7 +87,6 @@ class HistoryLayer(MapLayer):
                         pts += mapview.get_window_xy_from(lat, lon, zoom)
                     Line(points=pts, width=item["width"], cap="round", joint="round")
 
-                # ----- label tanggal -----
                 tex = self._texture(item["label"])
                 ax, ay = mapview.get_window_xy_from(*item["anchor"], zoom)
                 pad = dp(5)
@@ -118,7 +114,6 @@ class Map(MDScreen):
 
         self.ids.history_layer.set_items(history)
 
-        # Pusatkan ke rekaman terbaru hanya kalau ada rekaman baru.
         if history and history[0].get("id") != self._latest_id:
             self._latest_id = history[0].get("id")
             start = history[0]["start"]
