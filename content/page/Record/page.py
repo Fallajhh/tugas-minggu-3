@@ -10,13 +10,14 @@ from kivy.graphics import Color, Line
 from kivy.lang import Builder
 from kivy.properties import BooleanProperty
 from kivy.uix.modalview import ModalView
-from kivy_garden.mapview import MapLayer
+from kivy_garden.mapview import MapLayer, MapView  # MapView: supaya @MapView terdaftar di Factory
 from kivymd.app import MDApp
 from kivymd.uix.screen import MDScreen
 
 from content.util.paths import Paths
 from content.service.track_manager import TrackManager
 from content.service.history_manager import HistoryManager
+from content.service.compass_manager import CompassManager
 
 LIVE_FILE = Paths.TRACK
 
@@ -136,11 +137,13 @@ class TrackLine(MapLayer):
 
 class Record(MDScreen):
     _clock = None
+    _compass_clock = None
     _anim = None
     _target = None
 
     recording = BooleanProperty(False)
     paused = BooleanProperty(False)
+    follow_heading = BooleanProperty(False)
 
     started_at = 0
     marker_pos = None
@@ -168,6 +171,7 @@ class Record(MDScreen):
         self.update_marker_scale(self.map_view, self.map_view.zoom)
 
     def on_enter(self):
+        self._start_compass()
         if self.recording:
             self._schedule()
             self.tick(0)  # kejar titik yang masuk saat layar tidak aktif
@@ -175,8 +179,41 @@ class Record(MDScreen):
             Factory.RecordModal().open()
 
     def on_leave(self):
+        self._stop_compass()
         self.cancel_timers()
         self._flush()
+
+    # ------------------------------------------------------------------
+    # Kompas & rotasi peta
+    # ------------------------------------------------------------------
+    def _start_compass(self):
+        CompassManager.start()
+        if self._compass_clock is None:
+            self._compass_clock = Clock.schedule_interval(self._update_compass, 1 / 20)
+
+    def _stop_compass(self):
+        if self._compass_clock:
+            self._compass_clock.cancel()
+            self._compass_clock = None
+        CompassManager.stop()
+
+    def _update_compass(self, dt):
+        h = CompassManager.heading()
+        if h is None:
+            return
+        self.ids.compass.angle = h
+        if self.follow_heading:
+            self.map_view.bearing = h        # peta diputar berlawanan arah jarum jam
+            self.human_position.rot = -h     # marker tetap tegak di layar
+
+    def toggle_follow(self):
+        self.follow_heading = not self.follow_heading
+        if self.follow_heading:
+            if self.marker_pos:
+                self.map_view.center_on(*self.marker_pos)
+        else:
+            self.map_view.bearing = 0
+            self.human_position.rot = 0
 
     # ------------------------------------------------------------------
     # Baca data dari tracker
@@ -278,7 +315,7 @@ class Record(MDScreen):
             self._commit(lat, lon, sid)
             self.last_ts = ts
             self.move_marker(lat, lon)
-            if not self.centered:
+            if not self.centered or self.follow_heading:
                 self.centered = True
                 self.map_view.center_on(lat, lon)
             self._next()
@@ -297,6 +334,8 @@ class Record(MDScreen):
         anim.start(self.human_position)
 
     def _on_anim_progress(self, anim, widget, progress):
+        if self.follow_heading:
+            self.map_view.center_on(widget.lat, widget.lon)  # peta tetap berpusat di marker
         layer = getattr(widget, "_layer", None)
         if layer:
             layer.reposition()
@@ -356,7 +395,9 @@ class Record(MDScreen):
         waktu = f"{jam:02d}:{menit:02d}:{detik:02d}"
         if self.paused:
             waktu += "  (jeda otomatis)"
-        self.status.text = f"{waktu}\n{posisi}"
+
+        arah = CompassManager.label(CompassManager.heading())
+        self.status.text = f"{waktu}\n{posisi}" + (f"\n{arah}" if arah else "")
 
     def update_marker_scale(self, map_view, zoom):
         size = max(8, min(48, 24 * (2 ** (zoom - 14))))
@@ -417,8 +458,8 @@ class Record(MDScreen):
         TrackManager.stop()
         self.cancel_timers()
 
-        self.process_new_points()  
-        self._flush()           
+        self.process_new_points()
+        self._flush()
 
         saved = self.save_history()
 

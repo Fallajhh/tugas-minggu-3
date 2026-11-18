@@ -2,20 +2,78 @@
 #:import Factory kivy.factory.Factory
 #:import Paths content.util.paths.Paths
 
+<CompassView@Widget>:
+    angle: 0
+    size_hint: None, None
+    size: dp(56), dp(56)
+    canvas.before:
+        Color:
+            rgba: 1, 1, 1, .9
+        Ellipse:
+            pos: self.pos
+            size: self.size
+        PushMatrix
+        Rotate:
+            angle: self.angle
+            origin: self.center
+    canvas:
+        Color:
+            rgba: 0.79, 0.07, 0.07, 1
+        Triangle:
+            points: [self.center_x, self.center_y + self.height*.4, self.center_x - self.width*.12, self.center_y, self.center_x + self.width*.12, self.center_y]
+        Color:
+            rgba: .35, .35, .35, 1
+        Triangle:
+            points: [self.center_x, self.center_y - self.height*.4, self.center_x - self.width*.12, self.center_y, self.center_x + self.width*.12, self.center_y]
+    canvas.after:
+        PopMatrix
+
+
+<RotatableMap@MapView>:
+    bearing: 0
+    canvas.before:
+        PushMatrix
+        Rotate:
+            angle: self.bearing
+            origin: self.center
+    canvas.after:
+        PopMatrix
+
+
+<TrackHumanPoin@MapMarker>:
+    rot: 0
+    size: dp(24), dp(24)
+    anchor_x: 0.5
+    anchor_y: 0.5
+    source: Paths.asset("icon", "track.png")
+    canvas.before:
+        PushMatrix
+        Rotate:
+            angle: self.rot
+            origin: self.center
+    canvas.after:
+        PopMatrix
+
+
 <Record>:
-    MapView:
-        id: map_view
-        lat: -6.9175
-        lon: 107.6191
-        zoom: 14
-
-        TrackLine:
-            id: track_line 
-
-        TrackHumanPoin:
-            id: human_position
+    StencilView:
+        RotatableMap:
+            id: map_view
+            size_hint: None, None
+            size: [(root.width ** 2 + root.height ** 2) ** .5] * 2
+            center: root.center
+            disabled: root.follow_heading
             lat: -6.9175
             lon: 107.6191
+            zoom: 14
+
+            TrackLine:
+                id: track_line
+
+            TrackHumanPoin:
+                id: human_position
+                lat: -6.9175
+                lon: 107.6191
 
     MDLabel:
         id: status
@@ -23,6 +81,21 @@
         adaptive_height: True
         halign: "center"
         pos_hint: {"center_x": .5, "top": .95}
+
+    CompassView:
+        id: compass
+        pos_hint: {"right": .96, "top": .95}
+
+    MDButton:
+        style: "filled"
+        theme_bg_color: "Custom"
+        md_bg_color: "#FF6822" if root.follow_heading else "#9E9E9E"
+        pos_hint: {"right": .96}
+        y: root.height * .95 - dp(56) - dp(48)
+        on_release: root.toggle_follow()
+
+        MDButtonText:
+            text: "Heading-up" if root.follow_heading else "North-up"
 
     MDButton:
         style: "filled"
@@ -40,12 +113,6 @@
             text: "STOP"
             pos_hint: {"center_x": .5, "center_y": .5}
 
-
-<TrackHumanPoin@MapMarker>:
-    size: dp(24), dp(24)
-    anchor_x: 0.5
-    anchor_y: 0.5
-    source: Paths.asset("icon", "track.png")
 
 <RecordModal>:
     size_hint: None, None
