@@ -9,7 +9,7 @@ source.exclude_dirs = .venv,.git,.github,bin,.buildozer,__pycache__,tests
 
 version = 0.1
 
-requirements = python3,kivy==2.3.0,kivymd==2.0.0,materialyoucolor,materialshapes,asynckivy,asyncgui,exceptiongroup,pillow,kivy-garden.mapview,requests,plyer,pyjnius,android,com.android.alarm.permission.SET_ALARM
+requirements = python3,kivy==2.3.0,kivymd==2.0.0,materialyoucolor,materialshapes,asynckivy,asyncgui,exceptiongroup,pillow,kivy-garden.mapview,requests,plyer,pyjnius,android
 
 # foreground + sticky: service dihidupkan ulang OS kalau di-kill
 services = tracker:content/service/tracker.py:foreground:sticky:foregroundServiceType=location
@@ -33,7 +33,7 @@ android.ndk = 25b
 android.archs = arm64-v8a
 android.accept_sdk_license = True
 
-android.permissions = INTERNET,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,FOREGROUND_SERVICE,FOREGROUND_SERVICE_LOCATION,POST_NOTIFICATIONS,WAKE_LOCK
+android.permissions = INTERNET,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,FOREGROUND_SERVICE,FOREGROUND_SERVICE_LOCATION,POST_NOTIFICATIONS,WAKE_LOCK,com.android.alarm.permission.SET_ALARM
 
 android.manifest.launch_mode = singleTask
 android.allow_backup = False
