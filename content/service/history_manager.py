@@ -17,7 +17,6 @@ class HistoryManager:
         data = Paths.read_json(Paths.HISTORY)
         if not isinstance(data, list):
             return []
-        # buang entri rusak (bukan dict) supaya tidak crash di tempat lain
         return [h for h in data if isinstance(h, dict)]
 
     @staticmethod

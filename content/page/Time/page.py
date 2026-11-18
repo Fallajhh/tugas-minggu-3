@@ -19,6 +19,7 @@ from kivymd.uix.button import MDIconButton  # noqa: F401
 from kivymd.uix.scrollview import MDScrollView  # noqa: F401
 
 from content.util.paths import Paths
+from content.service.alarm_manager import AlarmManager
 
 
 class TimeChip(MDBoxLayout):
@@ -127,15 +128,16 @@ class Time(MDScreen):
         if count not in self.DEFAULT_TIMES:
             return fail("Frekuensi harus antara 1 sampai 5.")
 
-        time_list = [
+        raw_list = [
             value.strip()
             for value in times.split(",")
         ]
 
-        if len(time_list) != count:
+        if len(raw_list) != count:
             return fail(f"Jumlah jam harus {count}, pisahkan dengan koma.")
 
-        for value in time_list:
+        time_list = []
+        for value in raw_list:
             try:
                 hour, minute = map(int, value.split(":"))
 
@@ -145,18 +147,25 @@ class Time(MDScreen):
             except ValueError:
                 return fail(f"Format jam '{value}' salah (gunakan HH:MM).")
 
+            time_list.append(f"{hour:02d}:{minute:02d}")  # "7:0" -> "07:00"
+
+        if len(set(time_list)) != len(time_list):
+            return fail("Ada jam yang sama, setiap jam harus berbeda.")
+
         self.schedules.append({
             "name": name,
             "times": time_list
         })
 
         self.save_schedules()
+        AlarmManager.schedule(name, time_list)
         self.refresh_schedules()
         modal.dismiss()
 
     def delete_schedule(self, index):
         if 0 <= index < len(self.schedules):
-            self.schedules.pop(index)
+            schedule = self.schedules.pop(index)
+            AlarmManager.cancel(schedule["name"], schedule["times"])
             self.save_schedules()
             self.refresh_schedules()
 
