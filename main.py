@@ -1,129 +1,163 @@
-import content.config.config
-
-from kivy.utils import platform
-from kivy.clock import Clock
-from kivy.core.window import Window
-from kivy.properties import NumericProperty
-from kivymd.app import MDApp
-
-from content.page.Manager.page import Manager
-from content.util.insets import get_system_insets
+import os
+import sys
+import traceback
 
 
-class MainApp(MDApp):
+def _crash_file():
+    base = os.environ.get("ANDROID_PRIVATE") or os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "crash.log")
 
-    inset_top = NumericProperty(0)
-    inset_bottom = NumericProperty(0)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+def _save_crash(text):
+    print(text)
+    try:
+        with open(_crash_file(), "w", encoding="utf-8") as f:
+            f.write(text)
+    except Exception:
+        pass
 
-        self.location_permission_granted = False
-        self.fine_location_granted = False
-        self.notification_permission_granted = False
 
-    def build(self):
-        self.theme_cls.theme_style = "Light"
-        self.update_insets()
-        Window.bind(size=self.update_insets)
-        return Manager()
+def _show_crash(text):
+    from kivy.app import App
+    from kivy.core.window import Window
+    from kivy.uix.label import Label
+    from kivy.uix.scrollview import ScrollView
 
-    def update_insets(self, *args):
-        self.inset_top, self.inset_bottom = get_system_insets()
-
-    def on_start(self):
-        Clock.schedule_once(self.update_insets, 0.5)
-
-        if platform != "android":
-            Clock.schedule_once(
-                lambda dt: Clock.schedule_once(
-                    lambda dt: Window.show(), 0
-                ),
-                0
+    class CrashApp(App):
+        def build(self):
+            Window.clearcolor = (0.08, 0.08, 0.08, 1)
+            label = Label(
+                text="JAGJAG gagal start.\nFoto layar ini & kirim.\n\n" + text,
+                font_size="12sp",
+                size_hint_y=None,
+                halign="left",
+                valign="top",
+                color=(1, 1, 1, 1),
             )
-            return
+            label.bind(width=lambda w, v: setattr(w, "text_size", (v, None)))
+            label.bind(texture_size=lambda w, v: setattr(w, "height", v[1]))
+            view = ScrollView()
+            view.add_widget(label)
+            return view
 
-        Clock.schedule_once(self.ask_permissions, 1)
+    CrashApp().run()
 
-    # --------------------------------------------------
-    # Permissions
-    # --------------------------------------------------
-    def ask_permissions(self, dt=None):
-        if platform != "android":
-            return
 
-        try:
-            from android.permissions import request_permissions
-            from jnius import autoclass
+def _start():
+    import content.config.config
 
-            BuildVersion = autoclass("android.os.Build$VERSION")
-            sdk_version = BuildVersion.SDK_INT
+    from kivy.clock import Clock
+    from kivy.core.window import Window
+    from kivy.properties import NumericProperty
+    from kivy.utils import platform
+    from kivymd.app import MDApp
 
-            permissions = [
-                "android.permission.ACCESS_FINE_LOCATION",
-                "android.permission.ACCESS_COARSE_LOCATION",
-            ]
+    from content.page.Manager.page import Manager
+    from content.util.insets import get_system_insets
 
-            if sdk_version >= 33:
-                permissions.append(
-                    "android.permission.POST_NOTIFICATIONS"
+    class MainApp(MDApp):
+
+        inset_top = NumericProperty(0)
+        inset_bottom = NumericProperty(0)
+
+        def __init__(self, **kwargs):
+            super().__init__(**kwargs)
+
+            self.location_permission_granted = False
+            self.fine_location_granted = False
+            self.notification_permission_granted = False
+
+        def build(self):
+            self.theme_cls.theme_style = "Light"
+            self.update_insets()
+            Window.bind(size=self.update_insets)
+            return Manager()
+
+        def update_insets(self, *args):
+            self.inset_top, self.inset_bottom = get_system_insets()
+
+        def on_start(self):
+            Clock.schedule_once(self.update_insets, 0.5)
+
+            if platform != "android":
+                Clock.schedule_once(
+                    lambda dt: Clock.schedule_once(
+                        lambda dt: Window.show(), 0
+                    ),
+                    0
                 )
+                return
 
-            request_permissions(
-                permissions,
-                self.on_permissions_result
-            )
+            Clock.schedule_once(self.ask_permissions, 1)
 
-        except Exception as e:
-            print(f"[PERMISSION ERROR] {e}")
+        def ask_permissions(self, dt=None):
+            if platform != "android":
+                return
 
-    def on_permissions_result(self, permissions, grants):
-        permission_results = dict(zip(permissions, grants))
+            try:
+                from android.permissions import request_permissions
+                from jnius import autoclass
 
-        fine = permission_results.get(
-            "android.permission.ACCESS_FINE_LOCATION",
-            False
-        )
+                BuildVersion = autoclass("android.os.Build$VERSION")
+                sdk_version = BuildVersion.SDK_INT
 
-        coarse = permission_results.get(
-            "android.permission.ACCESS_COARSE_LOCATION",
-            False
-        )
+                permissions = [
+                    "android.permission.ACCESS_FINE_LOCATION",
+                    "android.permission.ACCESS_COARSE_LOCATION",
+                ]
 
-        notification = permission_results.get(
-            "android.permission.POST_NOTIFICATIONS",
-            True
-        )
+                if sdk_version >= 33:
+                    permissions.append("android.permission.POST_NOTIFICATIONS")
 
-        self.fine_location_granted = bool(fine)
-        self.location_permission_granted = bool(fine or coarse)
-        self.notification_permission_granted = bool(notification)
+                request_permissions(permissions, self.on_permissions_result)
 
-        print("[PERMISSION] Fine location:", self.fine_location_granted)
-        print("[PERMISSION] Coarse location:", bool(coarse))
-        print("[PERMISSION] Location granted:", self.location_permission_granted)
-        print("[PERMISSION] Notification:", self.notification_permission_granted)
+            except Exception as e:
+                print(f"[PERMISSION ERROR] {e}")
 
-        if not self.location_permission_granted:
-            print("[WARNING] Izin lokasi belum diberikan.")
+        def on_permissions_result(self, permissions, grants):
+            results = dict(zip(permissions, grants))
 
-        if not self.fine_location_granted:
-            print("[WARNING] GPS presisi belum diberikan.")
+            fine = results.get("android.permission.ACCESS_FINE_LOCATION", False)
+            coarse = results.get("android.permission.ACCESS_COARSE_LOCATION", False)
+            notification = results.get("android.permission.POST_NOTIFICATIONS", True)
 
-    # --------------------------------------------------
-    # App lifecycle
-    # --------------------------------------------------
-    def on_pause(self):
-        return True
+            self.fine_location_granted = bool(fine)
+            self.location_permission_granted = bool(fine or coarse)
+            self.notification_permission_granted = bool(notification)
 
-    def on_resume(self):
-        Clock.schedule_once(self.update_insets, 0.2)
+            print("[PERMISSION] Fine location:", self.fine_location_granted)
+            print("[PERMISSION] Coarse location:", bool(coarse))
+            print("[PERMISSION] Location granted:", self.location_permission_granted)
+            print("[PERMISSION] Notification:", self.notification_permission_granted)
 
-        if platform == "android":
-            print("[APP] Application resumed.")
+            if not self.location_permission_granted:
+                print("[WARNING] Izin lokasi belum diberikan.")
 
-    def on_stop(self):
-        print("[APP] Application stopped.")
+            if not self.fine_location_granted:
+                print("[WARNING] GPS presisi belum diberikan.")
+
+        def on_pause(self):
+            return True
+
+        def on_resume(self):
+            Clock.schedule_once(self.update_insets, 0.2)
+
+            if platform == "android":
+                print("[APP] Application resumed.")
+
+        def on_stop(self):
+            print("[APP] Application stopped.")
+
+    MainApp().run()
 
 
-MainApp().run()
+try:
+    _start()
+except Exception:
+    _crash_text = traceback.format_exc()
+    _save_crash(_crash_text)
+    try:
+        _show_crash(_crash_text)
+    except Exception:
+        _save_crash(_crash_text + "\n\n[Layar error juga gagal]\n" + traceback.format_exc())
+        raise
